@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COA Chapter 4</title>
+<meta name="description" content="COA Chapter 4, interactive: addressing modes, instruction types, status bits, RISC vs CISC and microprogrammed control.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+/* Same system as the DIP Practicals site: sticky top bar, contents sidebar, one topic per page,
+   short theory first, then a "Try it" bench. Blue = accent and 1-bits. */
+:root{
+  --bg:#FFFFFF; --surface:#F5F7FA; --surface-2:#EBF1F8; --line:#DCE3EB;
+  --ink:#1A2433; --ink-2:#4A5568; --muted:#718096;
+  --blue:#1F4E8C; --blue-ink:#173D6E; --blue-soft:#E7EFF9; --on-blue:#FFFFFF;
+  --green:#2E7D5B; --green-soft:#E6F3EC; --red:#B4472F; --red-soft:#FBEAE5;
+  --yellow-soft:#FFF4CC; --off:#E4E9EF;
+  --serif:"Source Serif 4", Cambria, Georgia, serif;
+  --sans:"Source Sans 3", Calibri, "Segoe UI", Arial, sans-serif;
+  --mono:"Source Code Pro", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151A21; --surface:#1C232C; --surface-2:#22303F; --line:#2F3B49;
+  --ink:#E6EBF1; --ink-2:#B8C2CF; --muted:#8C99A9;
+  --blue:#7FAEE8; --blue-ink:#A8C8F0; --blue-soft:#1F3049; --on-blue:#10161D;
+  --green:#6CC59B; --green-soft:#1C3328; --red:#EC8A72; --red-soft:#3A2420;
+  --yellow-soft:#3B3418; --off:#26303C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151A21; --surface:#1C232C; --surface-2:#22303F; --line:#2F3B49;
+  --ink:#E6EBF1; --ink-2:#B8C2CF; --muted:#8C99A9;
+  --blue:#7FAEE8; --blue-ink:#A8C8F0; --blue-soft:#1F3049; --on-blue:#10161D;
+  --green:#6CC59B; --green-soft:#1C3328; --red:#EC8A72; --red-soft:#3A2420;
+  --yellow-soft:#3B3418; --off:#26303C; color-scheme:dark}
+:root[data-theme="light"]{color-scheme:light}
+html{scroll-padding-top:70px}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+a{color:var(--blue)}
+code{font-family:var(--mono);font-size:.9em;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:10px 18px}
+.top .menu{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 12px;cursor:pointer}
+.top .ttl{font-family:var(--serif);font-weight:700;font-size:18px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .ttl span{color:var(--muted);font-family:var(--sans);font-weight:400;font-size:15px;margin-left:8px}
+.top .theme{border:1px solid var(--line);background:var(--bg);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:18px;line-height:1}
+.progbar{height:3px;background:var(--line);position:sticky;top:calc(57px + env(safe-area-inset-top,0px));z-index:19}
+.progbar i{display:block;height:100%;background:var(--blue);width:0;transition:width .3s}
+
+/* layout */
+.layout{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1400px;margin:0 auto}
+.toc{position:sticky;top:60px;height:calc(100vh - 60px);overflow:auto;padding:22px 14px 40px 22px;border-right:1px solid var(--line)}
+.toc h4{font-size:13px;color:var(--muted);font-weight:600;margin:18px 0 6px 8px}
+.toc h4:first-child{margin-top:0}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc a{display:flex;gap:8px;align-items:baseline;padding:5px 8px;border-radius:6px;text-decoration:none;color:var(--ink-2);font-size:15px;line-height:1.35}
+.toc a:hover{background:var(--surface)}
+.toc a[aria-current="page"]{background:var(--blue-soft);color:var(--blue-ink);font-weight:600}
+.toc .tick{width:14px;flex:none;color:var(--green);font-size:13px}
+.scrim{display:none}
+main{padding:36px clamp(16px,5vw,64px) 40px;min-width:0}
+.sec{max-width:900px}
+.sec.wide{max-width:1240px}
+.kicker{color:var(--blue);font-weight:600;font-size:15px;margin:0 0 4px}
+h1{font-family:var(--serif);font-size:clamp(30px,4vw,42px);line-height:1.15;margin:0 0 14px;text-wrap:balance}
+h2{font-family:var(--serif);font-size:clamp(26px,3.2vw,34px);line-height:1.2;margin:0 0 12px;text-wrap:balance}
+h3{font-family:var(--serif);font-size:21px;margin:28px 0 8px}
+p{margin:0 0 14px}
+.lead{font-size:19px;color:var(--ink-2);max-width:66ch}
+.prose{max-width:68ch}
+.muted{color:var(--muted)}
+.btn{border:1px solid var(--blue);background:var(--blue);color:var(--on-blue);border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--blue);border-color:var(--line)}
+.btn.sm{padding:5px 12px;font-size:15px}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:12px}
+.plan{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}
+.plan li{border-bottom:1px solid var(--line)}
+.plan a{display:grid;grid-template-columns:44px 1fr;gap:4px 12px;padding:12px 4px;text-decoration:none;color:var(--ink)}
+.plan a:hover{background:var(--surface)}
+.plan .n{font-family:var(--serif);font-weight:700;font-size:22px;color:var(--blue);grid-row:span 2}
+.plan b{font-weight:600}
+.plan span{color:var(--ink-2);font-size:15px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:14px 0}
+.box{border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--bg)}
+.box h4{margin:0 0 4px;font-size:17px}
+.box p,.box li{color:var(--ink-2);font-size:16px}
+.box ul{margin:0;padding-left:20px}
+.box p:last-child{margin:0}
+.callout{border-left:4px solid var(--blue);background:var(--blue-soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:18px 0;max-width:72ch}
+.callout p:last-child{margin:0}
+.formula{font-family:var(--mono);font-size:16px;padding:6px 14px;background:var(--surface);border-radius:8px;display:inline-block;margin:4px 8px 12px 0}
+
+/* try-it */
+.try{border:1px solid var(--line);border-radius:12px;padding:18px 18px 16px;margin:22px 0;background:var(--surface);min-width:0}
+.try-h{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.badge{font-size:13px;font-weight:700;background:var(--blue);color:var(--on-blue);border-radius:4px;padding:1px 8px}
+.try-h b{font-size:18px}
+.try-h .sub{color:var(--muted);font-size:15px}
+.lbl{font-size:13px;font-weight:600;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+.lbl:first-child{margin-top:0}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.seg button{border:0;background:none;padding:6px 12px;cursor:pointer;font-size:15px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--blue);color:var(--on-blue)}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:5px 14px;cursor:pointer;font-size:15px}
+.ops{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.op{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 10px;cursor:pointer;line-height:1.25}
+.op:hover{border-color:var(--blue)}
+.op b{font-family:var(--mono);font-size:14px;display:block}
+.op small{font-size:13px;color:var(--muted)}
+.note{font-size:15px;color:var(--ink-2);margin:12px 0 0;max-width:72ch}
+input[type=number],input[type=text],select{border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--bg);font-family:var(--mono);font-size:15px;width:92px}
+select{width:auto;max-width:100%}
+label.fld{display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:600;color:var(--muted)}
+label.check{display:inline-flex;gap:8px;align-items:center;cursor:pointer;font-weight:600;font-size:15px}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:700px){.split{grid-template-columns:minmax(0,1fr)}}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:12px 0;background:var(--bg)}
+table.t{width:100%;border-collapse:collapse;font-size:15.5px}
+table.t th{text-align:left;font-weight:600;padding:7px 12px;background:var(--surface);border-bottom:1px solid var(--line);font-size:14px}
+table.t td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t tr:last-child td{border-bottom:0}
+table.t td.m{font-family:var(--mono);font-size:14.5px;white-space:nowrap}
+table.t tr.sel td{background:var(--yellow-soft)}
+table.t tr.sel2 td{background:var(--blue-soft)}
+table.t input[type=number]{width:80px}
+
+/* bits */
+.bits{display:inline-flex;gap:4px;align-items:center}
+.bit{font-family:var(--mono);width:30px;height:36px;border:1px solid var(--line);background:var(--off);color:var(--muted);border-radius:5px;font-weight:700;cursor:pointer;padding:0;font-size:15px}
+.bit.on{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
+.bit:disabled{cursor:default}
+.bit.g{margin-right:8px}
+.bit.hl{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--green)}
+@media (max-width:440px){.bit{width:24px;height:32px;font-size:13px}.bit.g{margin-right:5px}}
+.bitline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bitname{font-family:var(--mono);font-size:14px;color:var(--muted);min-width:84px}
+.cells{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px}
+.cell{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-width:0}
+.cell small{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.cell strong{font-family:var(--mono);font-size:22px;display:block;font-variant-numeric:tabular-nums}
+.cell .sub{font-family:var(--mono);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.cell.hot{border-color:var(--blue);background:var(--blue-soft)}
+.cell.hot strong{color:var(--blue-ink)}
+.cell input{width:100%;font-size:18px;font-weight:700;margin:2px 0}
+ol.steps{margin:0;padding-left:22px;font-family:var(--mono);font-size:14.5px}
+ol.steps li{margin-bottom:3px}
+.fb{font-size:15px;padding:8px 12px;border-radius:8px;margin-top:10px}
+.fb.ok{background:var(--green-soft);color:var(--green)}
+.fb.no{background:var(--red-soft);color:var(--red)}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 7px;border-radius:4px}
+.tag.ea{background:var(--blue);color:var(--on-blue)}
+.tag.ptr{background:var(--green);color:var(--on-blue)}
+.tag.ins{background:var(--surface-2);color:var(--muted)}
+.log{font-family:var(--mono);font-size:13.5px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-height:56px;max-height:200px;overflow:auto}
+.log div{padding:2px 0;border-bottom:1px dashed var(--line);white-space:pre-wrap}
+.log div:first-child{font-weight:600}
+.log div:not(:first-child){color:var(--muted)}
+.log .err{color:var(--red)}
+.stk{display:flex;flex-direction:column-reverse;gap:4px;min-height:36px}
+.stk span{font-family:var(--mono);font-size:14px;background:var(--bg);border:1px solid var(--line);padding:2px 10px;border-radius:5px}
+.stk span:last-child{border-color:var(--blue)}
+.flash{animation:flash 1.1s ease-out}
+@keyframes flash{0%{background:var(--yellow-soft);box-shadow:0 0 0 2px var(--blue)}100%{}}
+.flags{display:flex;gap:8px;flex-wrap:wrap}
+.flag{min-width:96px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.flag b{font-family:var(--mono);font-size:20px;display:block}
+.flag small{font-size:13px;color:var(--muted);display:block;line-height:1.3}
+.flag.set{background:var(--blue-soft);border-color:var(--blue)}
+.flag.set b{color:var(--blue-ink)}
+.brs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.brx{font-family:var(--mono);font-size:14px;padding:8px 10px;border-radius:8px;border:1px dashed var(--line);color:var(--muted);background:var(--bg)}
+.brx b{display:block;font-size:15px}
+.brx.take{border:1px solid var(--green);background:var(--green-soft);color:var(--green)}
+.sum{font-family:var(--mono);font-size:16px;display:grid;grid-template-columns:auto auto;gap:3px 14px;justify-content:start;overflow-x:auto}
+.sum .k{color:var(--muted);font-size:13px;text-align:right;align-self:center}
+.sum .v{white-space:pre;letter-spacing:.12em}
+.sum .v.total{border-top:2px solid var(--ink);padding-top:3px;font-weight:700}
+.sum .c{color:var(--blue);font-weight:700}
+.sum .x{color:var(--red);font-weight:700}
+.prog{font-family:var(--mono);font-size:14px;width:100%;border-collapse:collapse}
+.prog td{padding:4px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.prog td.cm{color:var(--muted);white-space:normal;font-family:var(--sans)}
+.prog tr.cur td{background:var(--yellow-soft)}
+.prog tr.cur td:first-child{box-shadow:inset 4px 0 0 var(--blue)}
+.enc{display:flex;flex-direction:column;gap:6px}
+.encl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:14px}
+.encl code{min-width:150px}
+.bytes{display:flex;gap:2px}
+.bytes i{display:block;width:13px;height:18px;border-radius:2px;background:var(--blue)}
+.bytes.c i{background:var(--green)}
+.meter{font-size:14px;margin-bottom:8px}
+.meter .bar{height:10px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:2px}
+.meter .bar i{display:block;height:100%;background:var(--blue)}
+.meter .bar.c i{background:var(--green)}
+.sort{display:flex;flex-direction:column;gap:6px}
+.card{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);flex-wrap:wrap}
+.card .q{flex:1 1 220px;min-width:0}
+.card.ok{border-color:var(--green);background:var(--green-soft)}
+.card.no{border-color:var(--red);background:var(--red-soft)}
+.card .verdict{font-size:14px;font-weight:700}
+.flips{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.flipc{text-align:left;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);cursor:pointer;min-height:96px}
+.flipc b{display:block;margin-bottom:4px}
+.flipc span{font-size:15px;color:var(--muted)}
+.flipc.open{background:var(--blue-soft);border-color:var(--blue)}
+.flipc.open span{color:var(--ink)}
+.org{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:600px){.org{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.blk{border:1.5px solid var(--line);border-radius:8px;padding:10px;font-size:15px;background:var(--bg)}
+.blk b{display:block;font-family:var(--mono);font-size:13px}
+.blk.on{border-color:var(--blue);background:var(--blue-soft)}
+.fields{display:grid;grid-template-columns:3fr 3fr 3fr 2fr 2fr 7fr;gap:4px}
+.fd{border-radius:6px;padding:6px;background:var(--bg);border:1px solid var(--line);min-width:0;text-align:center}
+.fd small{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.fd code{display:block;border:0;background:none;font-size:13.5px;font-weight:700;letter-spacing:.06em;padding:0}
+.fd span{display:block;font-family:var(--mono);font-size:12.5px;color:var(--blue-ink);overflow-wrap:anywhere}
+@media (max-width:560px){.fields{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.wgroups{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.wg{display:flex;flex-direction:column;gap:4px}
+.wg small{font-size:12.5px;color:var(--muted);font-weight:600;text-align:center}
+.mux{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.mux span{font-family:var(--mono);font-size:13px;padding:6px;border-radius:6px;border:1px dashed var(--line);text-align:center;color:var(--muted);overflow-wrap:anywhere;background:var(--bg)}
+.mux span.pick{border:1.5px solid var(--blue);background:var(--blue-soft);color:var(--ink);font-weight:700}
+.seqblk{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)}
+.seqblk > b{font-family:var(--mono);font-size:13px;display:block;margin-bottom:6px}
+.arrow{font-family:var(--mono);font-size:13px;color:var(--blue);text-align:center;margin:4px 0}
+.mpgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:1100px){.mpgrid{grid-template-columns:minmax(0,1fr)}}
+.regs6{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.regs6{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.phase{display:inline-block;font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--blue);color:var(--on-blue)}
+.memtbl input[type=number]{width:72px;font-size:14px;padding:3px 6px}
+.memtbl select{font-size:14px;padding:3px}
+.mk{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue)}
+.q{border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:0 0 10px;background:var(--bg)}
+.q p{font-weight:600;margin:0 0 8px}
+.q .ch{display:flex;flex-direction:column;gap:6px}
+.q .ch button{text-align:left;border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:var(--bg);cursor:pointer}
+.q .ch button:disabled{cursor:default}
+.q .ch button.right{border-color:var(--green);background:var(--green-soft);color:var(--green);font-weight:600}
+.q .ch button.wrong{border-color:var(--red);background:var(--red-soft);color:var(--red)}
+.q .why{font-size:15px;color:var(--ink-2);margin-top:8px}
+.scorebar{display:flex;gap:18px;align-items:baseline;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 16px;margin:0 0 12px;flex-wrap:wrap}
+.scorebar b{font-family:var(--serif);font-size:26px;color:var(--blue)}
+details summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:15px}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:12px;max-width:900px;margin-top:44px;padding-top:18px;border-top:1px solid var(--line)}
+.pager .mid{color:var(--muted);font-size:14px;text-align:center}
+@media (max-width:980px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  .toc{position:fixed;left:0;top:0;bottom:0;width:300px;max-width:85vw;height:100%;background:var(--bg);z-index:40;transform:translateX(-105%);transition:transform .25s;padding-top:calc(22px + env(safe-area-inset-top,0px))}
+  body.toc-open .toc{transform:none}
+  body.toc-open .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:30}
+  .top .ttl span{display:none}
+}
+@media (min-width:981px){.top .menu{display:none}}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="menu" id="menuBtn" aria-label="Open contents">&#9776; Contents</button>
+  <div class="ttl">COA Chapter 4<span>Instruction set &amp; control unit</span></div>
+  <button class="theme" id="themeBtn" aria-label="Switch light or dark theme" title="Switch theme">&#9680;</button>
+</header>
+<div class="progbar" aria-hidden="true"><i id="progBar"></i></div>
+<div class="layout">
+  <nav class="toc" id="toc" aria-label="Contents"></nav>
+  <div class="scrim" id="scrim"></div>
+  <main id="main"></main>
+</div>
+
+<script>
+/* ================= HELPERS ================= */
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const binN=(v,n)=>{let s='';for(let i=n-1;i>=0;i--)s+=(v>>i)&1;return s};
+const grp=s=>s.replace(/(\d{4})(?=\d)/g,'$1 ');
+const s8=v=>v&0x80?v-256:v;
+const s16=v=>v&0x8000?v-65536:v;
+const hex=(v,n=2)=>v.toString(16).toUpperCase().padStart(n,'0');
+const KEY='coa-lab-v1';
+let SEEN={};try{SEEN=JSON.parse(localStorage.getItem(KEY+'-seen')||'{}')}catch(e){}
+function bitsHTML(v,n,id,{editable=true,hl=0,inbit=-1}={}){
+  let h='<span class="bits">';
+  for(let i=n-1;i>=0;i--){const b=(v>>i)&1;
+    h+=`<button class="bit${b?' on':''}${((hl>>i)&1)||i===inbit?' hl':''}${i%4===0&&i!==0?' g':''}" data-row="${id}" data-i="${i}" ${editable?'':'disabled'} aria-label="${id} bit ${i} is ${b}">${b}</button>`;}
+  return h+'</span>';
+}
+function flash(el){if(!el)return;el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}
+const head=(k,t,lead)=>`<p class="kicker">${k}</p><h2>${t}</h2>${lead?`<p class="lead">${lead}</p>`:''}`;
+const tryBox=(title,sub,body)=>`<div class="try"><div class="try-h"><span class="badge">Try it</span><b>${title}</b><span class="sub">${sub||''}</span></div>${body}</div>`;
+const seg=(opts,cur,id)=>`<div class="seg" role="group" id="${id}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${String(v)===String(cur)}">${l}</button>`).join('')}</div>`;
+function bindSeg(el,fn){el.addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;$$('button',el).forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v);});}
+const tbl=(head,rows)=>`<div class="tbl-wrap"><table class="t"><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===0?' class="m"':''}>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
+
+function makeSort(box,items,A,B){
+  let order=items.map((x,i)=>i).sort(()=>Math.random()-.5);let ans={};
+  function render(){
+    const done=Object.keys(ans).length,ok=Object.entries(ans).filter(([i,a])=>items[i][1]===a).length;
+    box.innerHTML=`<p class="note" style="margin:0 0 8px"><b>${ok} / ${done} correct</b> · ${items.length-done} left</p>`+order.map(i=>{const it=items[i];const a=ans[i];const st=a===undefined?'':(a===it[1]?'ok':'no');
+      return`<div class="card ${st}"><span class="q">${it[0]}</span>${a===undefined?`<span class="row" style="gap:6px"><button class="chip" data-i="${i}" data-a="${A}">${A}</button><button class="chip" data-i="${i}" data-a="${B}">${B}</button></span>`:`<span class="verdict">${st==='ok'?'Correct: '+it[1]:'No, it is '+it[1]}</span>`}</div>`}).join('')+
+      `<div class="row" style="margin-top:8px"><button class="btn ghost sm" data-reset="1">Shuffle and restart</button></div>`;
+  }
+  box.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b){ans[b.dataset.i]=b.dataset.a;render();return;}
+    if(e.target.closest('[data-reset]')){ans={};order.sort(()=>Math.random()-.5);render();}});
+  render();
+}
+
+/* ================= ADDRESSING STATE ================= */
+const AM={mem:{300:0,301:400,400:700,499:650,500:800,600:900,700:350,702:375,800:425},addr:400,PC:300,R1:500,XR:200,mode:'direct',pmode:'direct',solved:{}};
+const MODES=[['direct','Direct'],['immediate','Immediate'],['indirect','Indirect'],['relative','Relative'],['indexed','Indexed'],['register','Register'],['regind','Register indirect'],['autoinc','Autoincrement'],['autodec','Autodecrement']];
+const MODE_INFO={direct:'EA = address field.',immediate:'Operand = address field itself (it sits in the 2nd instruction word).',indirect:'EA = M[address field]. The field points to the real address.',relative:'EA = PC + address field, with PC already past the instruction.',indexed:'EA = XR + address field.',register:'Operand = R1. No memory access.',regind:'EA = R1. The register holds the address.',autoinc:'EA = R1, then R1 ← R1 + 1.',autodec:'R1 ← R1 − 1 first, then EA = R1.'};
+function amSolve(mode,st=AM){
+  const {addr,PC,R1,XR}=st;const M=a=>st.mem[a]??0;
+  let ea=null,ac,steps=[],touch={},r1=R1;
+  switch(mode){
+    case'direct':ea=addr;steps=[`EA = address field = ${addr}`];break;
+    case'immediate':ea=PC+1;ac=addr;steps=[`Operand is the address field, held in word ${PC+1}`,`AC ← ${addr}`];break;
+    case'indirect':{const p=M(addr);touch[addr]='ptr';ea=p;steps=[`Pointer: M[${addr}] = ${p}`,`EA = ${p}`];break;}
+    case'relative':ea=PC+2+addr;steps=[`PC after fetching 2 words = ${PC+2}`,`EA = ${PC+2} + ${addr} = ${ea}`];break;
+    case'indexed':ea=XR+addr;steps=[`EA = XR + address = ${XR} + ${addr} = ${ea}`];break;
+    case'register':ac=R1;steps=['No EA: the operand is in R1',`AC ← R1 = ${R1}`];break;
+    case'regind':ea=R1;steps=[`EA = R1 = ${R1}`];break;
+    case'autoinc':ea=R1;r1=R1+1;steps=[`EA = R1 = ${R1}`];break;
+    case'autodec':r1=R1-1;ea=r1;steps=[`First R1 ← R1 − 1 = ${r1}`,`EA = ${ea}`];break;
+  }
+  if(ac===undefined){ac=M(ea);steps.push(`AC ← M[${ea}] = ${ac}`);}
+  if(mode==='autoinc')steps.push(`Then R1 ← R1 + 1 = ${r1}`);
+  if(ea!==null)touch[ea]=touch[ea]?touch[ea]+' ea':'ea';
+  return{ea,ac,steps,touch,r1};
+}
+function amMemTable(sol){
+  AM.mem[301]=AM.addr;
+  const addrs=new Set(Object.keys(AM.mem).map(Number));Object.keys(sol.touch).forEach(a=>addrs.add(+a));
+  return `<div class="tbl-wrap"><table class="t"><tr><th>Address</th><th>Memory</th><th></th></tr>${[...addrs].sort((a,b)=>a-b).map(a=>{
+    const t=sol.touch[a]||'';const cls=t.includes('ea')?'sel':t.includes('ptr')?'sel2':'';
+    const c=a===300?'Load to AC · mode':a===301?`${AM.addr} <span class="muted">(address field)</span>`:`<input type="number" data-a="${a}" id="am-m-${a}" value="${AM.mem[a]??0}" aria-label="memory ${a}">`;
+    const tags=(a===300||a===301?'<span class="tag ins">instruction</span> ':'')+(t.includes('ptr')?'<span class="tag ptr">pointer</span> ':'')+(t.includes('ea')?'<span class="tag ea">EA</span>':'');
+    return`<tr class="${cls}"><td class="m">${a}</td><td class="m">${c}</td><td>${tags}</td></tr>`}).join('')}</table></div>`;
+}
+
+/* ================= SECTIONS ================= */
+const SECTIONS=[
+/* ---------- START ---------- */
+{id:'home',group:'Start',title:'Overview',render(el){
+  el.innerHTML=`<p class="kicker">Computer Organization &amp; Architecture · Chapter 4</p>
+  <h1>Instructions, status bits and the control unit</h1>
+  <p class="lead">Every topic in this unit as a page you can play with. Each page starts with a few lines of theory, then a <b>Try it</b> bench where you click, change a value and watch what the machine does.</p>
+  <div class="row" style="margin:6px 0 26px"><button class="btn" data-go="am-modes">Start the session</button><button class="btn ghost" data-go="mp-run">Jump to the simulator</button></div>
+  <h3>Plan</h3>
+  <ol class="plan">${[['am-modes','Addressing modes','Nine ways to find the operand, plus the practice problem'],['xfer','Instruction types','Data transfer, arithmetic, logic and masks, shifts'],['pc-ctrl','Program control','Branch, call and return, status bits, conditional branches'],['risc','RISC and CISC','Two design styles compared, then sort the features'],['hw-micro','Control unit','Hardwired vs microprogrammed, control memory, CAR and CDR'],['mp-config','Microprogram example','Instruction format, microinstruction format, sequencer, full run'],['quiz','Exit quiz','12 quick questions with instant feedback']].map((r,i)=>`<li><a href="#${r[0]}"><span class="n">${i+1}</span><b>${r[1]}</b><span>${r[2]}</span></a></li>`).join('')}</ol>
+  <div class="callout">Move between pages with the &larr; and &rarr; keys, the buttons at the bottom, or Contents. Pages you have opened get a tick.</div>`;
+}},
+/* ---------- ADDRESSING ---------- */
+{id:'am-modes',group:'Addressing modes',title:'Addressing modes',render(el){
+  el.innerHTML=head('Addressing modes','Where is the operand?','The addressing mode tells the CPU how to find the operand. From the address field and the registers it works out the <b>effective address (EA)</b>: the memory address where the operand really is.')+
+  tbl(['Mode','Rule'],MODES.map(([k,n])=>[n,MODE_INFO[k]]))+
+  tryBox('Trace a Load to AC','pick a mode, watch the EA light up in memory',`
+    <div class="lbl">Mode</div>${seg(MODES,AM.mode,'amSeg')}
+    <div class="split" style="margin-top:14px">
+      <div><div class="lbl">Registers (before fetch)</div>
+        <div class="row"><label class="fld">PC<input type="number" value="300" disabled id="amPC"></label><label class="fld">R1<input type="number" id="amR1" value="${AM.R1}"></label><label class="fld">XR<input type="number" id="amXR" value="${AM.XR}"></label><label class="fld">Address field<input type="number" id="amAddr" value="${AM.addr}"></label></div>
+        <div id="amOut"></div></div>
+      <div><div class="lbl">Memory (you can edit values)</div><div id="amMem"></div></div>
+    </div>`);
+  const draw=()=>{const s=amSolve(AM.mode);
+    $('#amOut').innerHTML=`<div class="cells" style="margin-top:14px"><div class="cell hot"><small>Effective address</small><strong>${s.ea===null?'—':s.ea}</strong></div><div class="cell hot"><small>AC after</small><strong>${s.ac}</strong></div><div class="cell"><small>R1 after</small><strong>${s.r1}</strong></div></div>
+    <div class="lbl">Working</div><ol class="steps">${s.steps.map(x=>`<li>${x}</li>`).join('')}</ol>`;
+    $('#amMem').innerHTML=amMemTable(s);};
+  bindSeg($('#amSeg'),v=>{AM.mode=v;draw();});
+  ['R1','XR'].forEach(k=>$('#am'+k).addEventListener('input',e=>{AM[k]=+e.target.value||0;draw();}));
+  $('#amAddr').addEventListener('input',e=>{AM.addr=+e.target.value||0;draw();});
+  $('#amMem').addEventListener('change',e=>{const a=e.target.dataset.a;if(a===undefined)return;AM.mem[a]=+e.target.value||0;draw();});
+  draw();
+}},
+{id:'am-practice',group:'Addressing modes',title:'Practice problem',render(el){
+  el.innerHTML=head('Addressing modes','Practice problem: find EA and AC','A two-word <code>Load to AC</code> instruction is at 300–301 and its address field is 400. Before the fetch PC = 300, R1 = 500 and XR = 200. Find the effective address and AC for all nine modes.')+
+  `<div class="callout"><p>Remember: in <b>relative</b> mode PC has already moved past both words, so it is 302. In <b>immediate</b> mode the operand is the address field itself.</p></div>`+
+  tryBox('Solve it yourself','pick a mode, type your answer, press Check',`
+    <div class="lbl">Mode</div>${seg(MODES,AM.pmode,'apSeg')}
+    <div class="split" style="margin-top:14px">
+      <div><div class="lbl" id="apTitle"></div>
+        <div class="row"><label class="fld">EA (blank if none)<input type="number" id="apEA"></label><label class="fld">AC<input type="number" id="apAC"></label><button class="btn" id="apCheck" style="align-self:flex-end">Check</button></div>
+        <div id="apFB"></div><p class="note" id="apScore"></p></div>
+      <div><div class="lbl">Memory</div>${tbl(['Address','Memory'],[[300,'Load to AC · mode'],[301,'Address = 400'],[400,700],[499,650],[500,800],[600,900],[700,350],[702,375],[800,425]])}</div>
+    </div>
+    <details style="margin-top:10px"><summary>Show the full answer table</summary><div id="apAll"></div></details>`);
+  const P0={mem:{300:0,301:400,400:700,499:650,500:800,600:900,700:350,702:375,800:425},addr:400,PC:300,R1:500,XR:200};
+  const name=k=>MODES.find(m=>m[0]===k)[1];
+  const score=()=>{const n=Object.keys(AM.solved).length;$('#apScore').innerHTML=`Solved <b>${n} of 9</b> modes${n?': '+Object.keys(AM.solved).map(name).join(', '):''}.`;};
+  const draw=()=>{$('#apTitle').textContent='Your answer · '+name(AM.pmode);$('#apEA').value='';$('#apAC').value='';$('#apFB').innerHTML='';score();};
+  bindSeg($('#apSeg'),v=>{AM.pmode=v;draw();});
+  $('#apCheck').addEventListener('click',()=>{const s=amSolve(AM.pmode,P0);const ge=$('#apEA').value.trim(),ga=$('#apAC').value.trim();
+    const eOK=s.ea===null?ge==='':(ge!==''&&+ge===s.ea);const aOK=ga!==''&&+ga===s.ac;
+    if(eOK&&aOK){AM.solved[AM.pmode]=1;$('#apFB').innerHTML=`<div class="fb ok">Correct. ${s.steps.join(' → ')}</div>`;score();}
+    else $('#apFB').innerHTML=`<div class="fb no">${eOK?'EA is right':'EA is not right'}, ${aOK?'AC is right':'AC is not right'}. Hint: ${MODE_INFO[AM.pmode]}</div>`;});
+  $('#apAll').innerHTML=tbl(['Mode','EA','AC','Working'],MODES.map(([k,n])=>{const s=amSolve(k,P0);return[n,s.ea===null?'—':s.ea,s.ac,s.steps.join('; ')]}));
+  draw();
+}},
+/* ---------- INSTRUCTION TYPES ---------- */
+{id:'xfer',group:'Instruction types',title:'Data transfer',render(el){
+  el.innerHTML=head('Instruction types','Data transfer instructions','These copy data from one place to another <b>without changing it</b>: between memory, registers, I/O ports and the stack.')+
+  tbl(['Mnemonic','Name','What it does'],[['LD','Load','memory → register'],['ST','Store','register → memory'],['MOV','Move','register ↔ register or memory'],['XCH','Exchange','swap two operands'],['IN / OUT','Input / Output','port ↔ register'],['PUSH / POP','Push / Pop','register ↔ top of stack']])+
+  tryBox('Move data around','click an instruction, watch what changes',machineHTML('T'));
+  bindMachine();
+}},
+{id:'arith',group:'Instruction types',title:'Arithmetic',render(el){
+  el.innerHTML=head('Instruction types','Arithmetic instructions','These compute a new value. <code>ADDC</code> and <code>SUBB</code> also use the carry, so 8-bit operations can be chained into 16-bit ones.')+
+  tbl(['Mnemonic','Operation'],[['INC / DEC','add or subtract 1'],['ADD / SUB','A + B, A − B'],['MUL / DIV','A × B, A ÷ B'],['ADDC','A + B + C'],['SUBB','A − B − borrow'],['NEG','2\'s complement of A']])+
+  `<div class="callout"><p>Subtraction is done as A + B′ + 1. Here <b>C = 1 means no borrow</b> (A ≥ B), the same convention as the status-bits example.</p></div>`+
+  tryBox('Do the sums','8-bit registers; type in any box to set up a case',machineHTML('A'));
+  bindMachine();
+}},
+{id:'logic',group:'Instruction types',title:'Logic and masks',render(el){
+  el.innerHTML=head('Instruction types','Logical instructions and masks','Logic instructions work on each bit separately. With a <b>mask</b> you choose which bits to change.')+
+  `<div class="cols"><div class="box"><h4>AND clears</h4><p>AND with 0 clears a bit, with 1 keeps it.</p></div><div class="box"><h4>OR sets</h4><p>OR with 1 sets a bit, with 0 keeps it.</p></div><div class="box"><h4>XOR flips</h4><p>XOR with 1 inverts a bit, with 0 keeps it.</p></div></div>`+
+  `<p class="prose"><code>CLR</code> makes every bit 0, <code>COM</code> inverts every bit. <code>CLRC</code>, <code>SETC</code>, <code>COMC</code> act on the carry flag; <code>EI</code> and <code>DI</code> enable and disable interrupts.</p>`+
+  tryBox('Apply a mask','click bits in the operand and the mask',`
+    <div class="lbl">Operation</div>${seg([['AND','AND'],['OR','OR'],['XOR','XOR'],['CLR','CLR'],['COM','COM']],LG.op,'lgSeg')}
+    <div class="stack" style="margin-top:14px">
+      <div class="bitline"><span class="bitname">operand</span><span id="lgV"></span></div>
+      <div class="bitline" id="lgMl"><span class="bitname" id="lgOpL"></span><span id="lgM"></span></div>
+      <div class="bitline"><span class="bitname">= result</span><span id="lgR"></span></div>
+    </div>
+    <p class="note" id="lgRule"></p>
+    <div class="row" style="margin-top:10px"><span class="note" style="margin:0">Mask presets:</span><button class="chip" data-mask="15">low nibble</button><button class="chip" data-mask="240">high nibble</button><button class="chip" data-mask="1">bit 0</button><button class="chip" data-mask="128">bit 7</button><button class="btn ghost sm" id="lgApply">Use result as operand</button></div>`)+
+  tryBox('Single-bit control instructions','carry and interrupt-enable flip-flops',`
+    <div class="row"><div class="flag" id="lgC"><b>0</b><small>C · carry</small></div><div class="flag" id="lgI"><b>1</b><small>IEN · interrupt enable</small></div>
+    ${['CLRC','SETC','COMC','EI','DI'].map(m=>`<button class="op" data-bm="${m}"><b>${m}</b></button>`).join('')}</div>`);
+  const draw=()=>{const r=LGOPS[LG.op](LG.v,LG.m);const ch=r^LG.v;const nm=LG.op==='CLR'||LG.op==='COM';
+    $('#lgV').innerHTML=bitsHTML(LG.v,8,'lgv');$('#lgM').innerHTML=bitsHTML(LG.m,8,'lgm');$('#lgMl').style.opacity=nm?.35:1;$('#lgOpL').textContent=nm?'(no mask)':LG.op+' mask';
+    $('#lgR').innerHTML=bitsHTML(r,8,'lgr',{editable:false,hl:ch});
+    const n=[...binN(ch,8)].filter(x=>x==='1').length;
+    $('#lgRule').innerHTML=`${LGRULE[LG.op]} <b>${n} bit${n===1?'':'s'} changed</b> (ringed in green).`;
+    const f=(e,v)=>{e.classList.toggle('set',!!v);e.querySelector('b').textContent=v;};f($('#lgC'),LG.C);f($('#lgI'),LG.IEN);};
+  bindSeg($('#lgSeg'),v=>{LG.op=v;draw();});
+  el.addEventListener('click',e=>{const b=e.target.closest('.bit');
+    if(b&&!b.disabled){if(b.dataset.row==='lgv')LG.v^=1<<+b.dataset.i;if(b.dataset.row==='lgm')LG.m^=1<<+b.dataset.i;draw();return;}
+    const m=e.target.closest('[data-mask]');if(m){LG.m=+m.dataset.mask;draw();return;}
+    const bm=e.target.closest('[data-bm]');if(bm){({CLRC:()=>LG.C=0,SETC:()=>LG.C=1,COMC:()=>LG.C^=1,EI:()=>LG.IEN=1,DI:()=>LG.IEN=0})[bm.dataset.bm]();draw();flash(bm.dataset.bm.endsWith('I')?$('#lgI'):$('#lgC'));return;}
+    if(e.target.id==='lgApply'){LG.v=LGOPS[LG.op](LG.v,LG.m);draw();}});
+  draw();
+}},
+{id:'shift',group:'Instruction types',title:'Shift instructions',render(el){
+  el.innerHTML=head('Instruction types','Shift instructions','A shift moves every bit one place left or right. The kinds differ only in <b>what enters</b> at one end and <b>where the leaving bit goes</b>.')+
+  tbl(['Mnemonic','What enters / where the bit goes'],[['SHR / SHL','a 0 enters; the leaving bit is lost'],['SHRA','the sign bit is copied (signed ÷ 2)'],['SHLA','like SHL; V = 1 if the sign changes'],['ROR / ROL','the leaving bit comes back at the other end'],['RORC / ROLC','C enters; the leaving bit goes into C']])+
+  tryBox('Shift a byte','starts with the slide example 1011 0011, C = 0; each click shifts the current value',`
+    <div class="stack">
+      <div class="bitline"><span class="bitname">before</span><span id="shB"></span></div>
+      <div class="bitline"><span class="bitname">now</span><span id="shV"></span><span class="bitname" style="min-width:0">C</span><span id="shC"></span></div>
+    </div>
+    <p class="note" id="shWhat">Pick a shift below. You can also click bits to change the value.</p>
+    <div class="cells" style="margin:12px 0"><div class="cell"><small>Unsigned</small><strong id="shU"></strong></div><div class="cell"><small>Signed</small><strong id="shS"></strong></div><div class="cell"><small>Overflow V</small><strong id="shVf"></strong></div></div>
+    <div class="ops">${Object.entries(SHOPS).map(([k,o])=>`<button class="op" data-sh="${k}"><b>${k}</b><small>${o.d}</small></button>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn ghost sm" id="shReset">Reset to 1011 0011</button></div>
+    <div class="lbl">History</div><div class="log" id="shLog"></div>`);
+  const draw=()=>{const inb=SH.last?SH.last.inb:-1;
+    $('#shB').innerHTML=SH.prev===null?'<span class="muted">—</span>':bitsHTML(SH.prev,8,'shp',{editable:false});
+    $('#shV').innerHTML=bitsHTML(SH.v,8,'shv',{inbit:inb});
+    $('#shC').innerHTML=`<span class="bits"><button class="bit${SH.C?' on':''}" data-row="shc" data-i="0" aria-label="carry">${SH.C}</button></span>`;
+    $('#shU').textContent=SH.v;$('#shS').textContent=s8(SH.v);$('#shVf').textContent=SH.V;
+    $('#shLog').innerHTML=SH.hist.length?SH.hist.map(h=>`<div>${h}</div>`).join(''):'<div>No shifts yet</div>';
+    if(SH.msg)$('#shWhat').innerHTML=SH.msg;};
+  el.addEventListener('click',e=>{const b=e.target.closest('.bit');
+    if(b&&!b.disabled){if(b.dataset.row==='shv'){SH.v^=1<<+b.dataset.i;SH.last=null;}else if(b.dataset.row==='shc')SH.C^=1;draw();return;}
+    const o=e.target.closest('[data-sh]');
+    if(o){const k=o.dataset.sh;const r=SHOPS[k].f(SH.v,SH.C);const oc=SH.C;SH.prev=SH.v;SH.v=r.r;SH.C=r.c;SH.V=r.V||0;SH.last=r;
+      const inV=(r.r>>r.inb)&1;
+      let w=`<b>${k}</b>: bit ${r.inb===7?0:7} (= ${r.out}) left the register and went to <b>${r.to}</b>. `;
+      w+=r.copy?`The sign bit (${inV}) was copied into bit 7, so the sign is kept. `:`A ${inV} entered at bit ${r.inb} (ringed). `;
+      if(k==='SHLA')w+=r.V?'The sign changed, so V = 1.':'The sign did not change, so V = 0.';
+      if(k.endsWith('C'))w+=` C was ${oc}, now ${SH.C}.`;
+      SH.msg=w;SH.hist.unshift(`${k.padEnd(5,' ')} ${grp(binN(SH.prev,8))} → ${grp(binN(SH.v,8))}  C=${SH.C}${k==='SHLA'?' V='+SH.V:''}`);SH.hist=SH.hist.slice(0,10);draw();flash($('#shV'));}
+    if(e.target.id==='shReset'){Object.assign(SH,{v:0b10110011,C:0,prev:null,last:null,V:0,hist:[],msg:'Pick a shift below.'});draw();}});
+  draw();
+}},
+/* ---------- PROGRAM CONTROL ---------- */
+{id:'pc-ctrl',group:'Program control',title:'Branch, call and return',render(el){
+  el.innerHTML=head('Program control','Branch, call and return','Normally PC goes up by one after each fetch, so instructions run in order. <b>Program control instructions write a new value into PC</b>, and that changes the order.')+
+  tbl(['Mnemonic','Action'],[['BR / JMP','PC ← address'],['SKP','skip the next instruction'],['CALL','save return address, go to subroutine'],['RET','PC ← saved return address'],['CMP','A − B, only status bits set'],['TST','A AND B, only status bits set']])+
+  tryBox('Step through a program','adds n + (n−1) + … + 1 using a loop and a subroutine',`
+    <div class="row"><label class="fld" style="flex-direction:row;align-items:center;gap:8px">n =<input type="number" id="pcN" value="${PC6?PC6.n:4}" min="1" max="9" style="width:64px"></label>
+    <button class="btn" id="pcStep">Step</button><button class="btn ghost" id="pcRun">Run</button><button class="btn ghost" id="pcReset">Reset</button><span class="note" style="margin:0" id="pcCount"></span></div>
+    <div class="tbl-wrap"><table class="prog" id="pcProg"></table></div>
+    <div class="cells" id="pcRegs"></div>
+    <div class="split" style="margin-top:12px"><div><div class="lbl">Stack (return addresses)</div><div class="stk" id="pcStack"></div></div><div><div class="lbl">What just happened</div><div class="log" id="pcLog"></div></div></div>
+    <p class="note">With n = 4 the sum is 10, so <code>BZ</code> is taken. Try n = 3: the sum is 6 and <code>BZ</code> falls through to <code>JMP</code>.</p>`);
+  if(!PC6)pcReset();
+  $('#pcStep').onclick=pcStep;$('#pcReset').onclick=pcReset;$('#pcN').onchange=pcReset;
+  $('#pcRun').onclick=()=>{if(pcTimer){pcStop();return;}if(PC6.halt)pcReset();$('#pcRun').textContent='Pause';pcTimer=setInterval(()=>{if(!$('#pcProg')){pcStop();return;}pcStep();if(PC6.halt)pcStop();},650);};
+  pcRender();
+}},
+{id:'status',group:'Program control',title:'Status bits',render(el){
+  el.innerHTML=head('Program control','Status bits (condition codes)','After an operation the ALU sets four status bits that describe the result. Conditional branches test them.')+
+  `<div class="cols"><div class="box"><h4>C · carry</h4><p>C = C8, the carry out of bit 7.</p></div><div class="box"><h4>S · sign</h4><p>S = F7, the left-most bit of the result.</p></div><div class="box"><h4>Z · zero</h4><p>Z = 1 when every result bit is 0.</p></div><div class="box"><h4>V · overflow</h4><p>V = C7 ⊕ C8: the carries into and out of bit 7 differ.</p></div></div>`+
+  tryBox('Inside the 8-bit ALU','default is the slide example A − B, A = 1111 0000, B = 0001 0100',`
+    <div class="row" style="justify-content:space-between">${seg([['ADD','ADD'],['SUB','SUB'],['CMP','CMP'],['TST','TST']],FL.op,'fSeg')}<label class="check"><input type="checkbox" id="fPred" ${FL.pred?'checked':''}> Predict the flags first</label></div>
+    <div class="stack" style="margin-top:14px">
+      <div class="bitline"><span class="bitname">A</span><span id="fA"></span><input type="number" id="fAd" min="0" max="255" aria-label="A decimal"></div>
+      <div class="bitline"><span class="bitname">B</span><span id="fB"></span><input type="number" id="fBd" min="0" max="255" aria-label="B decimal"></div>
+    </div>
+    <div class="row" style="margin-top:10px"><span class="note" style="margin:0">Examples:</span><button class="chip" data-ex="240,20,SUB">slide example</button><button class="chip" data-ex="127,1,ADD">signed overflow</button><button class="chip" data-ex="200,100,ADD">carry out</button><button class="chip" data-ex="37,37,CMP">equal compare</button><button class="chip" data-ex="20,240,SUB">borrow</button></div>
+    <div class="lbl">The addition</div><div class="sum" id="fSum"></div>
+    <div class="lbl">Status bits</div><div class="flags" id="fFlags"></div><div id="fPredBox"></div>
+    <p class="note" id="fCheck"></p>`);
+  bindSeg($('#fSeg'),v=>{FL.op=v;FL.checked=false;fRender();});
+  el.addEventListener('click',e=>{const b=e.target.closest('.bit');
+    if(b){const r=b.dataset.row;if(r==='fa')FL.a^=1<<+b.dataset.i;else if(r==='fb')FL.b^=1<<+b.dataset.i;else if(r&&r[0]==='g')FL.guess[r[1]]^=1;if(r==='fa'||r==='fb')FL.checked=false;fRender();return;}
+    const x=e.target.closest('[data-ex]');if(x){const [a,bb,op]=x.dataset.ex.split(',');Object.assign(FL,{a:+a,b:+bb,op,checked:false});$$('#fSeg button').forEach(z=>z.setAttribute('aria-pressed',z.dataset.v===op));fRender();return;}
+    if(e.target.id==='fCheckBtn'){FL.checked=true;fRender();}
+    if(e.target.id==='fAgain'){e.preventDefault();Object.assign(FL,{a:Math.floor(Math.random()*256),b:Math.floor(Math.random()*256),op:['ADD','SUB','CMP'][Math.floor(Math.random()*3)],checked:false,guess:{C:0,S:0,Z:0,V:0}});$$('#fSeg button').forEach(z=>z.setAttribute('aria-pressed',z.dataset.v===FL.op));fRender();}});
+  $('#fPred').onchange=e=>{FL.pred=e.target.checked;FL.checked=false;fRender();};
+  $('#fAd').oninput=e=>{FL.a=Math.max(0,Math.min(255,+e.target.value||0));FL.checked=false;fRender();};
+  $('#fBd').oninput=e=>{FL.b=Math.max(0,Math.min(255,+e.target.value||0));FL.checked=false;fRender();};
+  fRender();
+}},
+{id:'branch',group:'Program control',title:'Conditional branches',render(el){
+  el.innerHTML=head('Program control','Conditional branches','A conditional branch tests <b>one</b> status bit. If the condition is true, PC ← branch address; otherwise the next instruction runs as normal.')+
+  tbl(['Mnemonic','Branch if'],[['BZ / BNZ','zero (Z = 1) / not zero (Z = 0)'],['BC / BNC','carry (C = 1) / no carry (C = 0)'],['BP / BM','plus (S = 0) / minus (S = 1)'],['BV / BNV','overflow (V = 1) / no overflow (V = 0)']])+
+  tryBox('Which branches are taken?','set the flags directly, or let CMP A, B set them',`
+    <div class="lbl">Flags (click to toggle)</div><div class="flags" id="bfFlags"></div>
+    <div class="lbl">Or compute them with CMP A, B</div>
+    <div class="row"><label class="fld">A<input type="number" id="bfA" value="${BF.a}" min="0" max="255"></label><label class="fld">B<input type="number" id="bfB" value="${BF.b}" min="0" max="255"></label><button class="btn ghost" id="bfCmp" style="align-self:flex-end">Run CMP A, B</button></div>
+    <p class="note" id="bfMsg"></p>
+    <div class="lbl">Branches · green = taken</div><div class="brs" id="bfBr"></div>`);
+  const draw=()=>{const names={C:'Carry',S:'Sign',Z:'Zero',V:'Overflow'};
+    $('#bfFlags').innerHTML=['C','S','Z','V'].map(k=>`<div class="flag${BF[k]?' set':''}"><small>${names[k]}</small><span class="bits"><button class="bit${BF[k]?' on':''}" data-f="${k}" aria-label="${names[k]} flag">${BF[k]}</button></span> <b style="display:inline;font-size:16px">${k}</b></div>`).join('');
+    $('#bfBr').innerHTML=BRS.map(([m,c,k,v])=>{const t=BF[k]===v;return`<div class="brx${t?' take':''}"><b>${m}</b>${c} · ${t?'taken':'not taken'}</div>`}).join('');
+    $('#bfMsg').innerHTML=BF.msg||'';};
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(b){BF[b.dataset.f]^=1;BF.msg='';draw();}});
+  $('#bfCmp').onclick=()=>{BF.a=Math.max(0,Math.min(255,+$('#bfA').value||0));BF.b=Math.max(0,Math.min(255,+$('#bfB').value||0));const R=alu(BF.a,BF.b,'CMP');Object.assign(BF,{C:R.C,S:R.S,Z:R.Z,V:R.V});
+    BF.msg=`A − B = ${grp(binN(R.r,8))} (not stored). Unsigned: ${BF.a} ${BF.a>BF.b?'>':BF.a<BF.b?'<':'='} ${BF.b}. Signed: ${s8(BF.a)} ${s8(BF.a)>s8(BF.b)?'>':s8(BF.a)<s8(BF.b)?'<':'='} ${s8(BF.b)}.`;draw();};
+  draw();
+}},
+/* ---------- RISC / CISC ---------- */
+{id:'risc',group:'RISC and CISC',title:'RISC vs CISC',render(el){
+  el.innerHTML=head('Processor design','RISC versus CISC','Two ways to design an instruction set. <b>CISC</b> gives the machine many powerful instructions so each statement needs few of them. <b>RISC</b> keeps instructions few and simple so each runs in about one cycle.')+
+  `<div class="cols"><div class="box"><h4>CISC</h4><ul><li>100–250 instructions, 5–20 addressing modes</li><li>Variable-length formats</li><li>Arithmetic can use memory operands</li><li>Microprogrammed control · x86, VAX</li></ul></div>
+  <div class="box"><h4>RISC</h4><ul><li>Few instructions and addressing modes</li><li>Only load and store touch memory</li><li>Fixed length, one instruction per cycle (pipelining)</li><li>Hardwired control, many registers · ARM, MIPS, RISC-V</li></ul></div></div>`+
+  tryBox('Same statement, two instruction sets','A, B, C and X are in memory',`
+    <div class="lbl">Statement</div>${seg(RC.map((r,i)=>[i,r.s]),RCi,'rcSeg')}
+    <div class="split" style="margin-top:14px"><div><div class="lbl">CISC</div><div class="enc" id="rcC"></div></div><div><div class="lbl">RISC</div><div class="enc" id="rcR"></div></div></div>
+    <div class="split" style="margin-top:14px" id="rcM"></div>
+    <p class="note">Each block is one byte. Cycle counts are rough: a memory-to-memory CISC instruction takes several cycles, a pipelined RISC completes about one instruction per cycle.</p>`)+
+  tryBox('Sort it','is each feature RISC or CISC?','<div class="sort" id="rcSort"></div>');
+  const draw=()=>{const r=RC[RCi];
+    const line=(a,c)=>a.map(([t,b])=>`<div class="encl"><code>${t}</code><span class="bytes ${c}">${'<i></i>'.repeat(b)}</span></div>`).join('');
+    $('#rcC').innerHTML=line(r.c,'c');$('#rcR').innerHTML=line(r.r,'');
+    const cb=r.c.reduce((a,x)=>a+x[1],0),rb=r.r.reduce((a,x)=>a+x[1],0),ry=r.r.length+1;
+    const mx={n:Math.max(r.c.length,r.r.length),b:Math.max(cb,rb),y:Math.max(r.cc,ry)};
+    const m=(l,v,x,c)=>`<div class="meter">${l}: <b>${v}</b><div class="bar ${c}"><i style="width:${v/x*100}%"></i></div></div>`;
+    $('#rcM').innerHTML=`<div>${m('Instructions',r.c.length,mx.n,'c')}${m('Program bytes',cb,mx.b,'c')}${m('Cycles (approx.)',r.cc,mx.y,'c')}</div><div>${m('Instructions',r.r.length,mx.n,'')}${m('Program bytes',rb,mx.b,'')}${m('Cycles, pipelined (approx.)',ry,mx.y,'')}</div>`;};
+  bindSeg($('#rcSeg'),v=>{RCi=+v;draw();});draw();
+  makeSort($('#rcSort'),[['Few, simple instructions','RISC'],['Variable-length instruction formats','CISC'],['Only load and store access memory','RISC'],['Usually microprogrammed control','CISC'],['About one cycle per instruction','RISC'],['5 to 20 addressing modes','CISC'],['Many registers, overlapped register windows','RISC'],['Smaller programs','CISC'],['Burden on the compiler','RISC'],['Intel x86, DEC VAX','CISC'],['ARM, MIPS, RISC-V','RISC'],['Arithmetic works directly on memory','CISC']],'RISC','CISC');
+}},
+/* ---------- CONTROL UNIT ---------- */
+{id:'hw-micro',group:'Control unit',title:'Hardwired vs microprogrammed',render(el){
+  el.innerHTML=head('Control unit','Two ways to build a control unit','The control unit produces the signals that run each micro-operation. They can come from <b>logic circuits</b> or from <b>words stored in a memory</b>.')+
+  `<div class="cols"><div class="box"><h4>Hardwired</h4><p>Signals come from gates, flip-flops and decoders. Fast, but any change means a redesign. Used in RISC.</p></div><div class="box"><h4>Microprogrammed</h4><p>Control words sit in a control memory (ROM) and are read out like a program. Slower, but easy to change. Used in CISC.</p></div></div>`+
+  tryBox('Key terms','click a card to reveal it','<div class="flips" id="flips"></div>')+
+  tryBox('Sort it','hardwired or microprogrammed?','<div class="sort" id="cuSort"></div>');
+  $('#flips').innerHTML=TERMS.map(([t],i)=>`<button class="flipc" data-f="${i}"><b>${t}</b><span>Click to reveal</span></button>`).join('');
+  $('#flips').onclick=e=>{const c=e.target.closest('.flipc');if(!c)return;const o=c.classList.toggle('open');c.querySelector('span').textContent=o?TERMS[+c.dataset.f][1]:'Click to reveal';};
+  makeSort($('#cuSort'),[['Signals from gates, decoders and flip-flops','Hardwired'],['Needs a control memory (ROM)','Microprogrammed'],['Faster','Hardwired'],['Change it by rewriting the microprogram','Microprogrammed'],['Typical of RISC processors','Hardwired'],['Typical of CISC processors','Microprogrammed'],['Error fixing is easier','Microprogrammed'],['A large instruction set makes it complex and costly','Hardwired'],['A control-memory read every step','Microprogrammed']],'Hardwired','Microprogrammed');
+}},
+{id:'org',group:'Control unit',title:'Control memory organization',render(el){
+  el.innerHTML=head('Control unit','Microprogrammed control organization','Each clock, one microinstruction is read from control memory and its micro-operations run. Two registers hold the loop together.')+
+  `<div class="cols"><div class="box"><h4>CAR</h4><p>Control address register: the address of the next microinstruction.</p></div><div class="box"><h4>CDR</h4><p>Control data register: the microinstruction now running. Also called the pipeline register.</p></div><div class="box"><h4>Sequencer</h4><p>Works out the next address from the microinstruction, the opcode and the status bits.</p></div></div>`+
+  tryBox('Follow one clock','press Clock to move around the loop',`
+    <div class="org" id="org">
+      <div class="blk" data-k="0"><b>External input</b>opcode, status bits</div><div class="blk" data-k="1"><b>Sequencer</b>next-address generator</div><div class="blk" data-k="2"><b>CAR</b>control address register</div>
+      <div class="blk" data-k="3"><b>Control memory</b>ROM</div><div class="blk" data-k="4"><b>CDR</b>control data register</div><div class="blk" data-k="5"><b>Control word</b>micro-operations run</div>
+      <div class="blk" data-k="6" style="grid-column:1/-1"><b>Next-address information</b>fed back to the sequencer</div></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="orgClk">Clock ▸</button><span class="note" style="margin:0" id="orgTxt">Step 0 of ${ORG.length}</span></div>`);
+  let k=-1;$('#orgClk').onclick=()=>{k=(k+1)%ORG.length;const [a,b,t]=ORG[k];$$('#org .blk').forEach(x=>x.classList.toggle('on',+x.dataset.k===a||+x.dataset.k===b));$('#orgTxt').innerHTML=`<b>Step ${k+1} of ${ORG.length}.</b> ${t}`;};
+}},
+/* ---------- MICROPROGRAM EXAMPLE ---------- */
+{id:'mp-config',group:'Microprogram example',title:'Computer and instruction format',render(el){
+  el.innerHTML=head('Microprogram example','The example computer','Main memory is 2048 × 16, so PC and AR are 11 bits. Control memory is 128 × 20, so CAR and SBR are 7 bits. DR and AC are 16 bits. Four instructions are defined.')+
+  tbl(['Symbol','Opcode','Description','Routine starts at'],[['ADD','0000','AC ← AC + M[EA]','0'],['BRANCH','0001','if (AC < 0) then PC ← EA','4'],['STORE','0010','M[EA] ← AC','8'],['EXCHANGE','0011','AC ← M[EA], M[EA] ← AC','12']])+
+  `<div class="callout"><p>Instruction word: <b>I</b> (bit 15) · <b>opcode</b> (bits 14–11) · <b>address</b> (bits 10–0). I = 1 means the address is indirect. Mapping puts the opcode into CAR(2–5), so CAR = 0 · opcode · 00 and each routine gets 4 words. FETCH starts at 64.</p></div>`+
+  tryBox('Build an instruction word','click bits, or use the controls',`
+    <div class="row"><label class="check"><input type="checkbox" id="cwI" ${CW.I?'checked':''}> Indirect (I = 1)</label>${seg(OPC.map((o,i)=>[i,o]),CW.op,'cwSeg')}<label class="fld" style="flex-direction:row;align-items:center;gap:6px">Address<input type="number" id="cwA" min="0" max="2047" value="${CW.a}"></label></div>
+    <div class="wgroups" style="margin-top:14px;overflow-x:auto" id="cwBits"></div>
+    <div class="cells" style="margin-top:14px" id="cwOut"></div>
+    <p class="note" id="cwMean"></p>`);
+  const draw=()=>{const w=(CW.I<<15)|(CW.op<<11)|CW.a;
+    $('#cwBits').innerHTML=`<div class="wg">${bitsHTML(CW.I,1,'cw15')}<small>I</small></div><div class="wg">${bitsHTML(CW.op,4,'cwop')}<small>opcode</small></div><div class="wg">${bitsHTML(CW.a,11,'cwad')}<small>address</small></div>`;
+    $('#cwOut').innerHTML=`<div class="cell"><small>Word (hex)</small><strong>${hex(w,4)}</strong></div><div class="cell hot"><small>Mapped CAR</small><strong>${CW.op<<2}</strong><span class="sub">0 ${binN(CW.op,4)} 00</span></div><div class="cell"><small>Routine</small><strong style="font-size:18px">${OPC[CW.op]||'not defined'}</strong></div>`;
+    const ea=CW.I?`EA = M[${CW.a}]`:`EA = ${CW.a}`;
+    $('#cwMean').innerHTML=CW.op<4?`<b>${OPC[CW.op]}${CW.I?' I':''} ${CW.a}</b>: ${ea}, then ${['AC ← AC + M[EA]','if AC < 0 then PC ← EA','M[EA] ← AC','AC ↔ M[EA]'][CW.op]}.`:'Opcodes 0100–1111 are not used in this example (the map has room for 16 routines).';
+    $('#cwI').checked=!!CW.I;$('#cwA').value=CW.a;$$('#cwSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===CW.op));};
+  bindSeg($('#cwSeg'),v=>{CW.op=+v;draw();});
+  $('#cwI').onchange=e=>{CW.I=e.target.checked?1:0;draw();};$('#cwA').oninput=e=>{CW.a=Math.max(0,Math.min(2047,+e.target.value||0));draw();};
+  $('#cwBits').onclick=e=>{const b=e.target.closest('.bit');if(!b)return;const i=+b.dataset.i;if(b.dataset.row==='cw15')CW.I^=1;if(b.dataset.row==='cwop')CW.op^=1<<i;if(b.dataset.row==='cwad')CW.a^=1<<i;draw();};
+  draw();
+}},
+{id:'mi-format',group:'Microprogram example',title:'Microinstruction format',render(el){
+  el.innerHTML=head('Microprogram example','Microinstruction format (20 bits)','Each microinstruction has three micro-operation fields, so up to three micro-operations run at once, plus fields that decide the next address.')+
+  tbl(['Field','Bits','Meaning'],[['F1 F2 F3','3 + 3 + 3','one micro-operation each (000 = NOP)'],['CD','2','condition: U (always 1), I, S (AC sign), Z (AC = 0)'],['BR','2','branch type: JMP, CALL, RET, MAP'],['AD','7','branch address in control memory']])+
+  tbl(['BR','Action'],[['JMP','if condition = 1: CAR ← AD, else CAR ← CAR + 1'],['CALL','if condition = 1: SBR ← CAR + 1, CAR ← AD, else CAR ← CAR + 1'],['RET','CAR ← SBR'],['MAP','CAR(2–5) ← DR(11–14), other bits 0']])+
+  tryBox('Build a microinstruction','choose each field, or load a line of the real microprogram',`
+    <label class="fld">Load from control memory<select id="mfLoad"><option value="">choose…</option>${Object.entries(CM).map(([a,m])=>`<option value="${a}">${a}: ${m.label?m.label+': ':''}${symOf(m)}</option>`).join('')}</select></label>
+    <div class="row" style="margin-top:10px">
+      <label class="fld">F1<select id="mf1">${F1N.map(x=>`<option>${x}</option>`).join('')}</select></label>
+      <label class="fld">F2<select id="mf2">${F2N.map(x=>`<option>${x}</option>`).join('')}</select></label>
+      <label class="fld">F3<select id="mf3">${F3N.slice(0,7).map(x=>`<option>${x}</option>`).join('')}</select></label>
+      <label class="fld">CD<select id="mcd">${CDN.map(x=>`<option>${x}</option>`).join('')}</select></label>
+      <label class="fld">BR<select id="mbr">${BRN.map(x=>`<option>${x}</option>`).join('')}</select></label>
+      <label class="fld">AD<input type="number" id="mad" min="0" max="127"></label></div>
+    <div class="lbl">The 20-bit word</div><div class="fields" id="mfF"></div>
+    <div class="lbl">What it does</div><ol class="steps" id="mfDo"></ol>`);
+  const draw=()=>{const m=MF;['1','2','3'].forEach(i=>$('#mf'+i).value=m['f'+i]);$('#mcd').value=m.cd;$('#mbr').value=m.br;$('#mad').value=m.ad;
+    $('#mfF').innerHTML=fieldsHTML(m);
+    const ops=opsOf(m);const cond={U:'always',I:'if I = DR(15) = 1',S:'if AC is negative',Z:'if AC = 0'}[m.cd];
+    const nx={JMP:m.cd==='U'?`CAR ← ${m.ad} (always)`:`${cond}: CAR ← ${m.ad}, else CAR ← CAR + 1`,CALL:`${cond}: SBR ← CAR + 1 and CAR ← ${m.ad}, else CAR ← CAR + 1`,RET:'CAR ← SBR (return from subroutine; CD and AD are ignored)',MAP:'CAR ← 0 · DR(11–14) · 00 (jump to the opcode\'s routine)'}[m.br];
+    $('#mfDo').innerHTML=(ops.length?ops.map(o=>`<li>${o}: ${RTL[o]}</li>`).join(''):'<li>NOP: no micro-operation</li>')+`<li>Next address: ${nx}</li>`;};
+  const set=()=>{MF={f1:$('#mf1').value,f2:$('#mf2').value,f3:$('#mf3').value,cd:$('#mcd').value,br:$('#mbr').value,ad:Math.max(0,Math.min(127,+$('#mad').value||0)),sym:''};$('#mfLoad').value='';draw();};
+  ['#mf1','#mf2','#mf3','#mcd','#mbr','#mad'].forEach(s=>$(s).addEventListener('change',set));
+  $('#mfLoad').onchange=e=>{if(e.target.value==='')return;const m=CM[e.target.value];MF={...m};const v=e.target.value;draw();$('#mfLoad').value=v;};
+  draw();
+}},
+{id:'seq',group:'Microprogram example',title:'Sequencer design',render(el){
+  el.innerHTML=head('Microprogram example','Design of the sequencer','The sequencer picks the next CAR value. <b>MUX 2</b> selects the status bit named by CD and outputs it as <b>T</b>. The <b>input logic</b> uses BR and T to set the MUX 1 select lines S1 S0 and the SBR load signal L.')+
+  `<div class="formula">S1 = I1</div><div class="formula">S0 = I1·I0 + I1′·T</div><div class="formula">L = I1′·I0·T</div>`+
+  tryBox('Drive the sequencer','choose BR and T, see the next address',`
+    <div class="row"><div><div class="lbl">BR (I1 I0)</div>${seg(BRN.map(b=>[b,b]),SQ.br,'sqBR')}</div><div><div class="lbl">T (tested bit)</div>${seg([['0','0'],['1','1']],SQ.T,'sqT')}</div></div>
+    <div class="row" style="margin-top:12px"><label class="fld">CAR<input type="number" id="sqCAR" value="${SQ.CAR}" min="0" max="127"></label><label class="fld">AD<input type="number" id="sqAD" value="${SQ.AD}" min="0" max="127"></label><label class="fld">SBR<input type="number" id="sqSBR" value="${SQ.SBR}" min="0" max="127"></label><label class="fld">Opcode<select id="sqOP">${OPC.map((o,i)=>`<option value="${i}" ${i===SQ.op?'selected':''}>${binN(i,4)} ${o}</option>`).join('')}</select></label></div>
+    <div id="sqOut" style="margin-top:14px"></div>
+    <div class="lbl">Input logic truth table</div><div id="sqTT"></div>`);
+  const draw=()=>{const br=BRN.indexOf(SQ.br),I1=br>>1,I0=br&1,T=+SQ.T;const S1=I1,S0=(I1&I0)|((1-I1)&T),L=(1-I1)&I0&T,sel=S1*2+S0;
+    const c=[SQ.CAR+1,SQ.AD,SQ.SBR,SQ.op<<2];
+    $('#sqOut').innerHTML=`<div class="seqblk"><b>Input logic · I1 I0 = ${I1}${I0}, T = ${T}</b><span style="font-family:var(--mono);font-size:14px">S1 = <b>${S1}</b> &nbsp; S0 = <b>${S0}</b> &nbsp; L = <b>${L}</b>${L?` → SBR ← CAR + 1 = ${SQ.CAR+1}`:''}</span></div>
+    <div class="arrow">↓ S1 S0 = ${S1}${S0}</div>
+    <div class="seqblk"><b>MUX 1 (next address)</b><div class="mux">${['CAR + 1','AD','SBR','MAP'].map((n,i)=>`<span class="${i===sel?'pick':''}">${i}: ${n}<br>= ${c[i]}</span>`).join('')}</div></div>
+    <div class="arrow">↓</div><div class="cells"><div class="cell hot"><small>Next CAR</small><strong>${c[sel]}</strong></div><div class="cell"><small>SBR after</small><strong>${L?SQ.CAR+1:SQ.SBR}</strong></div></div>`;
+    $('#sqTT').innerHTML=`<div class="tbl-wrap"><table class="t"><tr><th>BR</th><th>I1 I0</th><th>T</th><th>S1 S0</th><th>L</th><th>Next address</th></tr>${[['JMP','0 0','0','0 0','0','CAR + 1',0,0],['JMP','0 0','1','0 1','0','AD',0,1],['CALL','0 1','0','0 0','0','CAR + 1',1,0],['CALL','0 1','1','0 1','1','AD, SBR ← CAR + 1',1,1],['RET','1 0','x','1 0','0','SBR',2,-1],['MAP','1 1','x','1 1','0','opcode mapping',3,-1]].map(r=>`<tr class="${br===r[6]&&(r[7]===-1||r[7]===T)?'sel':''}">${r.slice(0,6).map((x,i)=>`<td class="${i?'':'m'}">${x}</td>`).join('')}</tr>`).join('')}</table></div>`;};
+  bindSeg($('#sqBR'),v=>{SQ.br=v;draw();});bindSeg($('#sqT'),v=>{SQ.T=v;draw();});
+  [['CAR','#sqCAR'],['AD','#sqAD'],['SBR','#sqSBR']].forEach(([k,s])=>$(s).oninput=e=>{SQ[k]=Math.max(0,Math.min(127,+e.target.value||0));draw();});
+  $('#sqOP').onchange=e=>{SQ.op=+e.target.value;draw();};
+  draw();
+}},
+{id:'mp-run',group:'Microprogram example',title:'Run the microprogram',wide:true,render(el){
+  el.innerHTML=head('Microprogram example','Run the microprogrammed computer','Now everything together. FETCH (64–66) reads the instruction and MAPs to its routine; INDRCT (67–68) is a subroutine that resolves an indirect address. Step one microinstruction at a time.')+
+  `<div class="callout"><p>The sample program adds, adds indirectly, stores, branches over one instruction (AC is negative), exchanges, then does not branch (AC is positive). Edit any row to write your own.</p></div>`+
+  tryBox('Microprogram simulator','',`
+    <div class="row"><button class="btn" id="mpStep">Step micro</button><button class="btn ghost" id="mpInstr">Step instruction</button><button class="btn ghost" id="mpRun">Run</button><button class="btn ghost" id="mpReset">Reset</button><span id="mpPhase"></span><span class="note" style="margin:0" id="mpCount"></span></div>
+    <p class="note" id="mpMsg"></p>
+    <div class="mpgrid" style="margin-top:14px">
+      <div class="stack">
+        <div><div class="lbl">Registers</div><div class="regs6" id="mpRegs"></div></div>
+        <div><div class="lbl">CDR · microinstruction about to run</div><div class="fields" id="mpFields"></div><ol class="steps" id="mpOps" style="margin-top:8px"></ol></div>
+        <div><div class="lbl">Sequencer · choosing the next address</div><div id="mpSeq"></div></div>
+        <div><div class="lbl">Micro-operation log</div><div class="log" id="mpLog"></div></div>
+      </div>
+      <div class="stack">
+        <div><div class="lbl">Main memory · edit the program</div><div class="tbl-wrap"><table class="t memtbl" id="mpMem"></table></div><p class="note" style="margin-top:0">Editing resets the machine. The run stops when PC reaches an empty row.</p></div>
+        <div><div class="lbl">Control memory</div><div class="tbl-wrap"><table class="t" id="mpCM" style="font-size:13.5px"></table></div></div>
+      </div>
+    </div>`);
+  $('#mpStep').onclick=()=>mpStep();
+  $('#mpInstr').onclick=()=>{let g=0;do{if(!mpStep())break;g++;}while(MP.CAR!==64&&g<40);};
+  $('#mpRun').onclick=()=>{if(mpTimer){mpStop();return;}if(MP.halted)mpReset();$('#mpRun').textContent='Pause';mpTimer=setInterval(()=>{if(!$('#mpRegs')||!mpStep())mpStop();},550);};
+  $('#mpReset').onclick=()=>mpReset();
+  $('#mpMem').addEventListener('change',e=>{const t=e.target;
+    if(t.dataset.pi!==undefined)PROG[+t.dataset.pi].I=t.checked?1:0;
+    if(t.dataset.po!==undefined)PROG[+t.dataset.po].op=+t.value;
+    if(t.dataset.pa!==undefined)PROG[+t.dataset.pa].a=Math.max(0,Math.min(2047,+t.value||0));
+    if(t.dataset.pd!==undefined)DATA[t.dataset.pd]=Math.max(-32768,Math.min(65535,+t.value||0));
+    mpReset();});
+  if(!MP)mpReset();else mpRender(true);
+}},
+/* ---------- WRAP-UP ---------- */
+{id:'quiz',group:'Wrap-up',title:'Exit quiz',render(el){
+  el.innerHTML=head('Wrap-up','Exit quiz','Twelve quick questions across the unit. Pick an answer to see at once whether it is right, and why.')+
+  `<div class="scorebar"><b id="qzScore"></b><span id="qzLeft"></span><button class="btn ghost sm" id="qzReset">Reset quiz</button></div><div id="qz"></div>`;
+  const draw=()=>{let ok=0,done=0;
+    $('#qz').innerHTML=QZ.map((q,i)=>{const a=QA[i];if(a!==undefined){done++;if(a===q.k)ok++;}
+      return`<div class="q"><p>${i+1}. ${q.q}</p><div class="ch">${q.o.map((o,j)=>`<button data-q="${i}" data-o="${j}" class="${a===undefined?'':j===q.k?'right':j===a?'wrong':''}" ${a!==undefined?'disabled':''}>${o}</button>`).join('')}</div>${a!==undefined?`<div class="why">${a===q.k?'Correct. ':'Not quite. '}${q.w}</div>`:''}</div>`}).join('');
+    $('#qzScore').textContent=`${ok} / ${QZ.length}`;$('#qzLeft').textContent=`${QZ.length-done} unanswered`;};
+  $('#qz').onclick=e=>{const b=e.target.closest('[data-o]');if(!b)return;QA[+b.dataset.q]=+b.dataset.o;try{localStorage.setItem(KEY+'-quiz',JSON.stringify(QA))}catch(x){}draw();};
+  $('#qzReset').onclick=()=>{QA={};try{localStorage.removeItem(KEY+'-quiz')}catch(x){}draw();};
+  draw();
+}},
+];
+
+/* ================= MACHINE (transfer + arithmetic) ================= */
+const X2init={AC:12,R1:5,R2:0,C:0,M10:25,M11:0,IN:42,OUT:null,stack:[]};
+let X2=structuredClone(X2init),x2log=[];
+const REGS2=[['AC','AC'],['R1','R1'],['R2','R2'],['C','Carry C'],['M10','M[10]'],['M11','M[11]'],['IN','Input port'],['OUT','Output port']];
+const addC=r=>{X2.C=r>255?1:0;return r&255;};
+const OPS2=[
+ {g:'T',l:'LD M[10]',r:'AC ← M[10]',f:s=>{s.AC=s.M10;return['AC']}},
+ {g:'T',l:'ST M[11]',r:'M[11] ← AC',f:s=>{s.M11=s.AC;return['M11']}},
+ {g:'T',l:'MOV R1, AC',r:'R1 ← AC',f:s=>{s.R1=s.AC;return['R1']}},
+ {g:'T',l:'XCH AC, R1',r:'AC ↔ R1',f:s=>{[s.AC,s.R1]=[s.R1,s.AC];return['AC','R1']}},
+ {g:'T',l:'IN',r:'AC ← input port',f:s=>{s.AC=s.IN;return['AC']}},
+ {g:'T',l:'OUT',r:'output port ← AC',f:s=>{s.OUT=s.AC;return['OUT']}},
+ {g:'T',l:'PUSH AC',r:'stack ← AC',f:s=>{if(s.stack.length>=4)return{err:'Stack full (4 words). POP first.'};s.stack.push(s.AC);return['stack']}},
+ {g:'T',l:'POP R2',r:'R2 ← stack',f:s=>{if(!s.stack.length)return{err:'Stack empty. PUSH first.'};s.R2=s.stack.pop();return['R2','stack']}},
+ {g:'A',l:'INC AC',r:'AC ← AC + 1',f:s=>{s.AC=(s.AC+1)&255;return['AC']}},
+ {g:'A',l:'DEC AC',r:'AC ← AC − 1',f:s=>{s.AC=(s.AC+255)&255;return['AC']}},
+ {g:'A',l:'ADD AC, R1',r:'AC ← AC + R1',f:s=>{s.AC=addC(s.AC+s.R1);return['AC','C']}},
+ {g:'A',l:'SUB AC, R1',r:'AC ← AC − R1',f:s=>{s.AC=addC(s.AC+((~s.R1)&255)+1);return['AC','C']}},
+ {g:'A',l:'MUL AC, R1',r:'R2:AC ← AC × R1',f:s=>{const p=s.AC*s.R1;s.R2=p>>8;s.AC=p&255;return['AC','R2']}},
+ {g:'A',l:'DIV AC, R1',r:'AC ← quotient, R2 ← rem.',f:s=>{if(!s.R1)return{err:'Divide by zero: R1 is 0.'};const q=Math.floor(s.AC/s.R1);s.R2=s.AC%s.R1;s.AC=q;return['AC','R2']}},
+ {g:'A',l:'ADDC AC, R1',r:'AC ← AC + R1 + C',f:s=>{s.AC=addC(s.AC+s.R1+s.C);return['AC','C']}},
+ {g:'A',l:'SUBB AC, R1',r:'AC ← AC − R1 − C′',f:s=>{s.AC=addC(s.AC+((~s.R1)&255)+s.C);return['AC','C']}},
+ {g:'A',l:'NEG AC',r:'AC ← 2\'s complement',f:s=>{s.AC=(256-s.AC)&255;return['AC']}},
+];
+function machineHTML(g){return`<div class="lbl">Instructions</div><div class="ops" id="x2Ops">${OPS2.map((o,i)=>o.g===g?`<button class="op" data-op="${i}"><b>${o.l}</b><small>${o.r}</small></button>`:'').join('')}</div>
+  <div class="row" style="justify-content:space-between;margin-top:14px"><div class="lbl" style="margin:0">Machine state</div><button class="btn ghost sm" id="x2Reset">Reset</button></div><div class="cells" id="x2Regs" style="margin-top:6px"></div>
+  <div class="split" style="margin-top:12px"><div><div class="lbl">Stack (top in blue)</div><div class="stk" id="x2Stack"></div></div><div><div class="lbl">Log</div><div class="log" id="x2Log"></div></div></div>`;}
+function x2Render(ch=[]){
+  $('#x2Regs').innerHTML=REGS2.map(([k,n])=>{const v=X2[k];return`<div class="cell" data-k="${k}"><small>${n}</small>${k==='OUT'?`<strong>${v===null?'—':v}</strong>`:`<input type="number" id="x2-${k}" data-k="${k}" min="0" max="${k==='C'?1:255}" value="${v}">`}<span class="sub">${v===null?'&nbsp;':k==='C'?(v?'set':'clear'):grp(binN(v,8))+(v>127?' · '+s8(v):'')}</span></div>`}).join('');
+  $('#x2Stack').innerHTML=X2.stack.length?X2.stack.map(v=>`<span>${v}</span>`).join(''):'<span class="muted" style="border:0;background:none">empty</span>';
+  ch.forEach(k=>flash(k==='stack'?$('#x2Stack'):$(`#x2Regs .cell[data-k="${k}"]`)));
+  $('#x2Log').innerHTML=x2log.length?x2log.map(l=>`<div class="${l.e?'err':''}">${l.t}</div>`).join(''):'<div>Click an instruction</div>';
+}
+function bindMachine(){
+  $('#x2Ops').onclick=e=>{const c=e.target.closest('[data-op]');if(!c)return;const o=OPS2[+c.dataset.op];const r=o.f(X2);
+    if(r.err){x2log.unshift({t:`${o.l}: ${r.err}`,e:1});x2Render();return;}
+    const d=r.filter(k=>k!=='stack').map(k=>`${k==='M11'?'M[11]':k} = ${X2[k]}`).join(', ');
+    x2log.unshift({t:`${o.l.padEnd(11,' ')} ${o.r}  →  ${d||'stack depth '+X2.stack.length}`});x2log=x2log.slice(0,8);x2Render(r);};
+  $('#x2Regs').onchange=e=>{const k=e.target.dataset.k;if(!k)return;X2[k]=Math.max(0,Math.min(k==='C'?1:255,Math.round(+e.target.value||0)));x2Render();};
+  $('#x2Reset').onclick=()=>{X2=structuredClone(X2init);x2log=[];x2Render();};
+  x2Render();
+}
+
+/* ================= LOGIC / SHIFT DATA ================= */
+const LG={v:0b10101101,m:0b00001111,op:'AND',C:0,IEN:1};
+const LGOPS={AND:(v,m)=>v&m,OR:(v,m)=>v|m,XOR:(v,m)=>v^m,CLR:()=>0,COM:v=>(~v)&255};
+const LGRULE={AND:'AND keeps bits where the mask is 1 and clears bits where it is 0.',OR:'OR sets bits where the mask is 1.',XOR:'XOR flips bits where the mask is 1.',CLR:'CLR clears every bit.',COM:'COM inverts every bit (1\'s complement).'};
+const SH={v:0b10110011,C:0,prev:null,last:null,V:0,hist:[],msg:''};
+const SHOPS={
+ SHR:{d:'0 enters at left',f:(v,c)=>({r:v>>1,c,inb:7,out:v&1,to:'nowhere (lost)'})},
+ SHL:{d:'0 enters at right',f:(v,c)=>({r:(v<<1)&255,c,inb:0,out:v>>7,to:'nowhere (lost)'})},
+ SHRA:{d:'sign bit copied',f:(v,c)=>({r:(v>>1)|(v&128),c,inb:7,out:v&1,to:'nowhere (lost)',copy:1})},
+ SHLA:{d:'V if sign changes',f:(v,c)=>({r:(v<<1)&255,c,inb:0,out:v>>7,to:'nowhere (lost)',V:((v>>7)^(v>>6))&1})},
+ ROR:{d:'bit 0 → bit 7',f:(v,c)=>({r:(v>>1)|((v&1)<<7),c,inb:7,out:v&1,to:'bit 7'})},
+ ROL:{d:'bit 7 → bit 0',f:(v,c)=>({r:((v<<1)&255)|(v>>7),c,inb:0,out:v>>7,to:'bit 0'})},
+ RORC:{d:'C → bit 7, bit 0 → C',f:(v,c)=>({r:(v>>1)|(c<<7),c:v&1,inb:7,out:v&1,to:'C'})},
+ ROLC:{d:'C → bit 0, bit 7 → C',f:(v,c)=>({r:((v<<1)&255)|c,c:v>>7,inb:0,out:v>>7,to:'C'})},
+};
+
+/* ================= STATUS / BRANCH ================= */
+const FL={a:240,b:20,op:'SUB',pred:false,guess:{C:0,S:0,Z:0,V:0},checked:false};
+const BF={C:1,S:1,Z:0,V:0,a:240,b:20,msg:''};
+const BRS=[['BZ','Z = 1','Z',1],['BNZ','Z = 0','Z',0],['BC','C = 1','C',1],['BNC','C = 0','C',0],['BP','S = 0','S',0],['BM','S = 1','S',1],['BV','V = 1','V',1],['BNV','V = 0','V',0]];
+function alu(a,b,op){
+  if(op==='TST'){const r=a&b;return{r,C:0,V:0,S:r>>7,Z:r===0?1:0,car:null};}
+  const sub=op!=='ADD';const bb=sub?(~b)&255:b;let c=sub?1:0;const car=[c];let r=0;
+  for(let i=0;i<8;i++){const s=((a>>i)&1)+((bb>>i)&1)+c;r|=(s&1)<<i;c=s>>1;car.push(c);}
+  return{r,bb,car,C:car[8],C7:car[7],V:car[7]^car[8],S:r>>7,Z:r===0?1:0,sub};
+}
+function fRender(){
+  $('#fA').innerHTML=bitsHTML(FL.a,8,'fa');$('#fB').innerHTML=bitsHTML(FL.b,8,'fb');
+  if(document.activeElement!==$('#fAd'))$('#fAd').value=FL.a;if(document.activeElement!==$('#fBd'))$('#fBd').value=FL.b;
+  const R=alu(FL.a,FL.b,FL.op);let h='';
+  if(R.car){const cc=i=>`<span class="c">${R.car[i]}</span>`;
+    h+=`<span class="k">carries C8 | C7…C0</span><span class="v">${cc(8)} ${cc(7)}${R.car[6]}${R.car[5]}${R.car[4]} ${R.car[3]}${R.car[2]}${R.car[1]}${R.car[0]}</span>`;
+    h+=`<span class="k">A</span><span class="v">  ${grp(binN(FL.a,8))}</span>`;
+    h+=R.sub?`<span class="k">B′ (+1 as C0)</span><span class="v">+ ${grp(binN(R.bb,8))}</span>`:`<span class="k">B</span><span class="v">+ ${grp(binN(FL.b,8))}</span>`;
+    h+=`<span class="k">${FL.op==='CMP'?'result (not stored)':'result'}</span><span class="v total"><span class="x">${R.C}</span> ${grp(binN(R.r,8))}</span>`;
+  }else h+=`<span class="k">A</span><span class="v">  ${grp(binN(FL.a,8))}</span><span class="k">B</span><span class="v">∧ ${grp(binN(FL.b,8))}</span><span class="k">result (not stored)</span><span class="v total">  ${grp(binN(R.r,8))}</span>`;
+  $('#fSum').innerHTML=h;
+  const why={C:R.car?`C8 = ${R.C}`:'cleared (logic op)',S:`F7 = ${R.S}`,Z:R.Z?'all bits 0':'result not 0',V:R.car?`C7 ⊕ C8 = ${R.C7} ⊕ ${R.C}`:'cleared (logic op)'};
+  const nm={C:'Carry',S:'Sign',Z:'Zero',V:'Overflow'};
+  if(FL.pred&&!FL.checked){
+    $('#fFlags').innerHTML=['C','S','Z','V'].map(k=>`<div class="flag"><small>${nm[k]} · your guess</small><span class="bits"><button class="bit${FL.guess[k]?' on':''}" data-row="g${k}" data-i="0">${FL.guess[k]}</button></span> <b style="display:inline;font-size:16px">${k}</b></div>`).join('');
+    $('#fPredBox').innerHTML=`<div class="row" style="margin-top:10px"><button class="btn" id="fCheckBtn">Check my flags</button></div>`;$('#fCheck').textContent='';return;
+  }
+  $('#fFlags').innerHTML=['C','S','Z','V'].map(k=>`<div class="flag${R[k]?' set':''}"><b>${k} = ${R[k]}</b><small>${nm[k]} · ${why[k]}</small></div>`).join('');
+  if(FL.pred&&FL.checked){const w=['C','S','Z','V'].filter(k=>FL.guess[k]!==R[k]);$('#fPredBox').innerHTML=`<div class="fb ${w.length?'no':'ok'}">${w.length?'Check '+w.join(', ')+' against the reasons above.':'All four flags correct.'} <a href="#" id="fAgain">Try a random one</a></div>`;}
+  else $('#fPredBox').innerHTML='';
+  let t;
+  if(FL.op==='ADD'){const sv=s8(FL.a)+s8(FL.b),uv=FL.a+FL.b;t=`Signed: ${s8(FL.a)} + ${s8(FL.b)} = ${sv}${sv<-128||sv>127?', outside −128…127, so V = 1.':', fits in 8 bits, so V = 0.'} Unsigned: ${FL.a} + ${FL.b} = ${uv}${uv>255?', too big for 8 bits, so C = 1.':', fits, so C = 0.'}`;}
+  else if(FL.op==='TST')t='Only Z and S mean something after TST. BZ then asks: were all the tested bits 0?';
+  else{const sv=s8(FL.a)-s8(FL.b);t=`Signed: ${s8(FL.a)} − ${s8(FL.b)} = ${sv}${sv<-128||sv>127?', outside −128…127, so V = 1.':', fits, so V = 0.'} Unsigned: ${R.C?'C = 1 means no borrow, so A ≥ B.':'C = 0 means a borrow, so A < B.'}`;}
+  $('#fCheck').textContent=t;
+}
+
+/* ================= PROGRAM CONTROL TRACER ================= */
+function setZS(s,v){s.Z=v===0?1:0;s.S=(v>>7)&1;}
+const PG=[
+ {lab:'',t:'MOV R1, #n',cm:'R1 ← n (loop counter)',x:s=>{s.R1=s.n;return`R1 ← ${s.n}`}},
+ {lab:'',t:'CLR AC',cm:'AC ← 0 (running sum)',x:s=>{s.AC=0;return'AC ← 0'}},
+ {lab:'LOOP',t:'CALL SUM',cm:'push return address, PC ← 10',x:s=>{const r=s.PC;s.stack.push(r);s.PC=10;return`PC is already ${r}: push ${r}, then PC ← 10`}},
+ {lab:'',t:'DEC R1',cm:'R1 ← R1 − 1, sets Z',x:s=>{s.R1=(s.R1+255)&255;setZS(s,s.R1);return`R1 ← ${s.R1}, Z = ${s.Z}`}},
+ {lab:'',t:'BNZ LOOP',cm:'if Z = 0 then PC ← 2',x:s=>s.Z?'Z = 1: no branch, PC stays 5':(s.PC=2,'Z = 0: branch, PC ← 2')},
+ {lab:'',t:'CMP AC, #10',cm:'AC − 10, flags only',x:s=>{const r=(s.AC-10+256)&255;setZS(s,r);s.C=s.AC>=10?1:0;return`AC − 10 = ${s8(r)} (not stored): Z = ${s.Z}, S = ${s.S}, C = ${s.C}`}},
+ {lab:'',t:'BZ OK',cm:'if Z = 1 then PC ← 8',x:s=>s.Z?(s.PC=8,'Z = 1 (AC was 10): branch, PC ← 8'):'Z = 0 (AC is not 10): no branch'},
+ {lab:'',t:'JMP END',cm:'PC ← 9 always',x:s=>{s.PC=9;return'PC ← 9'}},
+ {lab:'OK',t:'MOV R2, #1',cm:'mark success',x:s=>{s.R2=1;return'R2 ← 1'}},
+ {lab:'END',t:'HLT',cm:'stop',x:s=>{s.halt=true;s.PC=9;return'Halt'}},
+ {lab:'SUM',t:'ADD AC, R1',cm:'AC ← AC + R1',x:s=>{s.AC=(s.AC+s.R1)&255;setZS(s,s.AC);return`AC ← AC + R1 = ${s.AC}`}},
+ {lab:'',t:'RET',cm:'PC ← pop stack',x:s=>{const r=s.stack.pop();s.PC=r;return`pop ${r}: PC ← ${r}`}},
+];
+let PC6=null,pcTimer=null;
+function pcReset(){const n=Math.max(1,Math.min(9,+($('#pcN')?.value)||4));PC6={n,PC:0,AC:0,R1:0,R2:0,Z:0,S:0,C:0,stack:[],halt:false,last:-1,steps:0,log:[]};pcStop();if($('#pcProg'))pcRender();}
+function pcStep(){if(PC6.halt)return;const i=PC6.PC;PC6.PC++;const m=PG[i].x(PC6);PC6.last=i;PC6.steps++;PC6.log.unshift(`${String(i).padStart(2,'0')}  ${PG[i].t.replace('#n','#'+PC6.n).padEnd(12,' ')} ${m}`);PC6.log=PC6.log.slice(0,8);pcRender();}
+function pcStop(){clearInterval(pcTimer);pcTimer=null;const b=$('#pcRun');if(b)b.textContent='Run';}
+function pcRender(){
+  $('#pcProg').innerHTML=PG.map((p,i)=>`<tr class="${i===PC6.PC&&!PC6.halt?'cur':''}"><td>${String(i).padStart(2,'0')}</td><td>${p.lab?p.lab+':':''}</td><td><b>${p.t.replace('#n','#'+PC6.n)}</b></td><td class="cm">${p.cm}</td></tr>`).join('');
+  const c=(n,v,h)=>`<div class="cell${h?' hot':''}"><small>${n}</small><strong>${v}</strong></div>`;
+  $('#pcRegs').innerHTML=c('PC',PC6.halt?'halt':PC6.PC,1)+c('AC',PC6.AC)+c('R1',PC6.R1)+c('R2',PC6.R2)+c('Z S C',`${PC6.Z} ${PC6.S} ${PC6.C}`);
+  $('#pcStack').innerHTML=PC6.stack.length?PC6.stack.map(v=>`<span>return → ${v}</span>`).join(''):'<span class="muted" style="border:0;background:none">empty</span>';
+  $('#pcLog').innerHTML=PC6.log.length?PC6.log.map(l=>`<div>${l}</div>`).join(''):'<div>Press Step. The highlighted row is where PC points.</div>';
+  $('#pcCount').textContent=`${PC6.steps} executed`+(PC6.halt?` · halted, R2 = ${PC6.R2}`:'');
+  $('#pcStep').disabled=PC6.halt;
+}
+
+/* ================= RISC / TERMS ================= */
+const RC=[
+ {s:'C = A + B',c:[['ADD C, A, B',7]],cc:6,r:[['LD R1, A',4],['LD R2, B',4],['ADD R3, R1, R2',4],['ST C, R3',4]]},
+ {s:'X = (A + B) × C',c:[['ADD X, A, B',7],['MUL X, X, C',7]],cc:16,r:[['LD R1, A',4],['LD R2, B',4],['ADD R3, R1, R2',4],['LD R4, C',4],['MUL R5, R3, R4',4],['ST X, R5',4]]},
+ {s:'A = A + 1',c:[['INC A',3]],cc:4,r:[['LD R1, A',4],['ADDI R1, R1, #1',4],['ST A, R1',4]]},
+ {s:'swap A and B',c:[['XCH A, B',5]],cc:5,r:[['LD R1, A',4],['LD R2, B',4],['ST A, R2',4],['ST B, R1',4]]},
+];
+let RCi=0;
+const TERMS=[['Control word','A string of 1s and 0s that sets the control variables for one step.'],['Microinstruction','A control word stored in control memory.'],['Microprogram','A sequence of microinstructions.'],['Control memory','Usually a ROM, so users cannot change it. A writable one allows dynamic microprogramming.'],['CAR','Control address register: address of the next microinstruction.'],['CDR','Control data register: the microinstruction now running. Also called the pipeline register.']];
+const ORG=[[0,1,'The opcode and status bits arrive at the sequencer.'],[1,2,'The sequencer works out the next control address and loads it into CAR.'],[2,3,'CAR applies that address to the control memory.'],[3,4,'Control memory reads out the microinstruction into CDR.'],[4,5,'The control-word fields in CDR run the micro-operations, all in this one clock.'],[4,6,'The next-address fields in CDR (CD, BR, AD) go back to the sequencer.'],[6,1,'The sequencer uses them for the next clock, and the loop repeats.']];
+
+/* ================= MICROPROGRAM ================= */
+const F1N=['NOP','ADD','CLRAC','INCAC','DRTAC','DRTAR','PCTAR','WRITE'];
+const F2N=['NOP','SUB','OR','AND','READ','ACTDR','INCDR','PCTDR'];
+const F3N=['NOP','XOR','COM','SHL','SHR','INCPC','ARTPC','—'];
+const CDN=['U','I','S','Z'],BRN=['JMP','CALL','RET','MAP'];
+const RTL={ADD:'AC ← AC + DR',CLRAC:'AC ← 0',INCAC:'AC ← AC + 1',DRTAC:'AC ← DR',DRTAR:'AR ← DR(0–10)',PCTAR:'AR ← PC',WRITE:'M[AR] ← DR',SUB:'AC ← AC − DR',OR:'AC ← AC ∨ DR',AND:'AC ← AC ∧ DR',READ:'DR ← M[AR]',ACTDR:'DR ← AC',INCDR:'DR ← DR + 1',PCTDR:'DR(0–10) ← PC',XOR:'AC ← AC ⊕ DR',COM:'AC ← AC′',SHL:'AC ← shl AC',SHR:'AC ← shr AC',INCPC:'PC ← PC + 1',ARTPC:'PC ← AR'};
+const mi=(label,f1,f2,f3,cd,br,ad,sym)=>({label,f1,f2,f3,cd,br,ad,sym});
+const CM={
+ 0:mi('ADD','NOP','NOP','NOP','I','CALL',67,'INDRCT'),1:mi('','NOP','READ','NOP','U','JMP',2,'NEXT'),2:mi('','ADD','NOP','NOP','U','JMP',64,'FETCH'),
+ 4:mi('BRANCH','NOP','NOP','NOP','S','JMP',6,'OVER'),5:mi('','NOP','NOP','NOP','U','JMP',64,'FETCH'),6:mi('OVER','NOP','NOP','NOP','I','CALL',67,'INDRCT'),7:mi('','NOP','NOP','ARTPC','U','JMP',64,'FETCH'),
+ 8:mi('STORE','NOP','NOP','NOP','I','CALL',67,'INDRCT'),9:mi('','NOP','ACTDR','NOP','U','JMP',10,'NEXT'),10:mi('','WRITE','NOP','NOP','U','JMP',64,'FETCH'),
+ 12:mi('EXCHANGE','NOP','NOP','NOP','I','CALL',67,'INDRCT'),13:mi('','NOP','READ','NOP','U','JMP',14,'NEXT'),14:mi('','DRTAC','ACTDR','NOP','U','JMP',15,'NEXT'),15:mi('','WRITE','NOP','NOP','U','JMP',64,'FETCH'),
+ 64:mi('FETCH','PCTAR','NOP','NOP','U','JMP',65,'NEXT'),65:mi('','NOP','READ','INCPC','U','JMP',66,'NEXT'),66:mi('','DRTAR','NOP','NOP','U','MAP',0,''),
+ 67:mi('INDRCT','NOP','READ','NOP','U','JMP',68,'NEXT'),68:mi('','DRTAR','NOP','NOP','U','RET',0,''),
+};
+const OPC=['ADD','BRANCH','STORE','EXCHANGE'];
+const opsOf=m=>[m.f1,m.f2,m.f3].filter(x=>x!=='NOP');
+const symOf=m=>`${opsOf(m).join(', ')||'NOP'} ${m.cd} ${m.br}${m.sym?' '+m.sym:''}`;
+const fieldsHTML=m=>[['F1',binN(F1N.indexOf(m.f1),3),m.f1],['F2',binN(F2N.indexOf(m.f2),3),m.f2],['F3',binN(F3N.indexOf(m.f3),3),m.f3],['CD',binN(CDN.indexOf(m.cd),2),m.cd],['BR',binN(BRN.indexOf(m.br),2),m.br],['AD',binN(m.ad,7),m.ad+(m.sym?' '+m.sym:'')]].map(([n,b,s])=>`<div class="fd"><small>${n}</small><code>${b}</code><span>${s}</span></div>`).join('');
+let CW={I:0,op:0,a:100};
+let MF={f1:'NOP',f2:'READ',f3:'INCPC',cd:'U',br:'JMP',ad:66,sym:'NEXT'};
+const SQ={br:'CALL',T:'1',CAR:8,AD:67,SBR:0,op:2};
+const PROG0=[{I:0,op:0,a:100},{I:1,op:0,a:101},{I:0,op:2,a:103},{I:0,op:1,a:5},{I:0,op:0,a:100},{I:0,op:3,a:104},{I:0,op:1,a:0},{I:0,op:-1,a:0}];
+const DATA0={100:5,101:102,102:-8,103:0,104:20,105:0};
+let PROG=structuredClone(PROG0),DATA={...DATA0},MP=null,mpTimer=null,mpChanged=[];
+const enc=p=>p.op<0?0:((p.I<<15)|(p.op<<11)|(p.a&0x7FF));
+const rd=a=>MP.mem[a]??0;
+function mpReset(){const mem={};PROG.forEach((p,i)=>mem[i]=enc(p));Object.entries(DATA).forEach(([a,v])=>mem[a]=v&0xFFFF);
+  MP={mem,PC:0,AR:0,DR:0,AC:0,CAR:64,SBR:0,halted:false,micro:0,instr:0,log:[],msg:'Ready. CAR = 64, the start of FETCH.'};mpChanged=[];mpStop();if($('#mpRegs'))mpRender(true);}
+function preview(){const m=CM[MP.CAR];const T={U:1,I:(MP.DR>>15)&1,S:(MP.AC>>15)&1,Z:MP.AC===0?1:0}[m.cd];
+  const br=BRN.indexOf(m.br),I1=br>>1,I0=br&1,S1=I1,S0=(I1&I0)|((1-I1)&T),L=(1-I1)&I0&T,sel=S1*2+S0,mapA=((MP.DR>>11)&0xF)<<2;
+  const cands=[MP.CAR+1,m.ad,MP.SBR,mapA];return{m,T,I1,I0,S1,S0,L,sel,cands,next:cands[sel],mapA};}
+const phaseOf=c=>c>=64&&c<=66?'Fetch':c>=67?'Indirect':OPC[c>>2]+' routine';
+function mpStep(){
+  if(MP.halted)return false;
+  if(MP.CAR===64&&!(MP.PC<8&&PROG[MP.PC]&&PROG[MP.PC].op>=0)){MP.halted=true;MP.msg=`<b>Program finished.</b> PC = ${MP.PC} holds no instruction. Press Reset to run again, or edit the program.`;mpStop();mpRender();return false;}
+  const P=preview(),m=P.m,o={PC:MP.PC,AR:MP.AR,DR:MP.DR,AC:MP.AC},n={...o},ch=[],w=[];
+  for(const op of [m.f1,m.f2,m.f3])switch(op){
+    case'ADD':n.AC=(o.AC+o.DR)&0xFFFF;break;case'CLRAC':n.AC=0;break;case'INCAC':n.AC=(o.AC+1)&0xFFFF;break;case'DRTAC':n.AC=o.DR;break;
+    case'DRTAR':n.AR=o.DR&0x7FF;break;case'PCTAR':n.AR=o.PC;break;case'WRITE':w.push([o.AR,o.DR]);break;
+    case'READ':n.DR=rd(o.AR);break;case'ACTDR':n.DR=o.AC;break;case'INCDR':n.DR=(o.DR+1)&0xFFFF;break;
+    case'INCPC':n.PC=(o.PC+1)&0x7FF;break;case'ARTPC':n.PC=o.AR;break;}
+  ['PC','AR','DR','AC'].forEach(k=>{if(n[k]!==o[k])ch.push(k);MP[k]=n[k];});
+  w.forEach(([a,v])=>{MP.mem[a]=v;ch.push('M'+a);});
+  const cur=MP.CAR;if(P.L){MP.SBR=cur+1;ch.push('SBR');}MP.CAR=P.next;ch.push('CAR');MP.micro++;if(MP.CAR===64)MP.instr++;
+  const nx=['CAR ← CAR + 1','CAR ← AD','CAR ← SBR','CAR ← MAP'][P.sel];
+  MP.log.unshift(`${String(cur).padStart(2,' ')}: ${(opsOf(m).map(x=>RTL[x]).join(', ')||'no micro-op').padEnd(26,' ')} ${nx} = ${P.next}${P.L?', SBR ← '+(cur+1):''}`);MP.log=MP.log.slice(0,10);
+  let ex;
+  if(m.br==='MAP')ex=`Opcode ${binN((o.DR>>11)&0xF,4)} is mapped to 0 ${binN((o.DR>>11)&0xF,4)} 00 = ${P.next}, the start of its routine.`;
+  else if(m.br==='CALL')ex=P.T?`I = 1, so the address is indirect: CALL INDRCT and save return address ${cur+1} in SBR.`:`I = 0 (direct address), so no call: continue at ${cur+1}.`;
+  else if(m.br==='RET')ex=`AR now holds the real address. Return: CAR ← SBR = ${P.next}.`;
+  else if(m.cd==='S')ex=P.T?'AC is negative (S = 1): branch to OVER.':'AC is not negative (S = 0): no branch, back to FETCH.';
+  else if(P.next===64)ex=`${phaseOf(cur)} done: back to FETCH at 64.`;
+  else ex=`${phaseOf(cur)}: ${opsOf(m).map(x=>RTL[x]).join(', ')||'no operation'}.`;
+  MP.msg=ex;mpChanged=ch;mpRender();return true;
+}
+function mpStop(){clearInterval(mpTimer);mpTimer=null;const b=$('#mpRun');if(b)b.textContent='Run';}
+function mpRender(full){
+  const m=CM[MP.CAR],P=MP.halted?null:preview();
+  $('#mpPhase').innerHTML=`<span class="phase">${MP.halted?'Halted':phaseOf(MP.CAR)}</span>`;
+  $('#mpCount').textContent=`${MP.micro} microinstructions · ${MP.instr} instructions`;
+  $('#mpMsg').innerHTML=MP.msg;
+  const r=(k,v,b,d)=>`<div class="cell" data-k="${k}"><small>${k} · ${b} bits</small><strong>${d}</strong><span class="sub">${grp(binN(v,b))}</span></div>`;
+  $('#mpRegs').innerHTML=r('PC',MP.PC,11,MP.PC)+r('AR',MP.AR,11,MP.AR)+r('DR',MP.DR,16,s16(MP.DR))+r('AC',MP.AC,16,s16(MP.AC))+r('CAR',MP.CAR,7,MP.CAR)+r('SBR',MP.SBR,7,MP.SBR);
+  mpChanged.forEach(k=>flash($(`#mpRegs .cell[data-k="${k}"]`)));
+  $('#mpFields').innerHTML=fieldsHTML(m);
+  const ops=opsOf(m);$('#mpOps').innerHTML=ops.length?ops.map(o=>`<li>${o}: ${RTL[o]}</li>`).join(''):'<li>NOP: no data-path change this clock</li>';
+  if(P){const cv={U:1,I:(MP.DR>>15)&1,S:(MP.AC>>15)&1,Z:MP.AC===0?1:0};
+    $('#mpSeq').innerHTML=`<div class="seqblk"><b>MUX 2 · select CD = ${m.cd}</b><div class="mux">${CDN.map(k=>`<span class="${k===m.cd?'pick':''}">${k==='U'?'1':k} = ${cv[k]}</span>`).join('')}</div></div>
+    <div class="arrow">↓ T = ${P.T}</div>
+    <div class="seqblk"><b>Input logic · BR = ${m.br} (${P.I1}${P.I0}), T = ${P.T}</b><span style="font-family:var(--mono);font-size:14px">S1 S0 = <b>${P.S1}${P.S0}</b> &nbsp; L = <b>${P.L}</b>${P.L?' → SBR ← '+(MP.CAR+1):''}</span></div>
+    <div class="arrow">↓</div>
+    <div class="seqblk"><b>MUX 1 · next address</b><div class="mux">${['CAR + 1','AD','SBR','MAP'].map((n,i)=>`<span class="${i===P.sel?'pick':''}">${n}<br>= ${P.cands[i]}</span>`).join('')}</div></div>
+    <div class="arrow">↓ next CAR = ${P.next}</div>`;}
+  else $('#mpSeq').innerHTML='<p class="note">Halted.</p>';
+  $('#mpCM').innerHTML=`<tr><th>Addr</th><th>Label</th><th>Symbolic</th><th>Binary</th></tr>`+Object.entries(CM).map(([a,x])=>`<tr class="${+a===MP.CAR&&!MP.halted?'sel':''}"><td class="m">${a}</td><td>${x.label}</td><td class="m">${symOf(x)}</td><td class="m">${binN(F1N.indexOf(x.f1),3)} ${binN(F2N.indexOf(x.f2),3)} ${binN(F3N.indexOf(x.f3),3)} ${binN(CDN.indexOf(x.cd),2)} ${binN(BRN.indexOf(x.br),2)} ${binN(x.ad,7)}</td></tr>`).join('');
+  if(full||!$('#mpMem').dataset.built){$('#mpMem').dataset.built='1';
+    $('#mpMem').innerHTML=`<tr><th>Addr</th><th>I</th><th>Opcode</th><th>Address / value</th><th>Word</th><th></th></tr>`+
+      PROG.map((p,i)=>`<tr data-ma="${i}"><td class="m">${i}</td><td><input type="checkbox" id="mp-i-${i}" data-pi="${i}" ${p.I?'checked':''} ${p.op<0?'disabled':''} aria-label="indirect row ${i}"></td><td><select id="mp-o-${i}" data-po="${i}" aria-label="opcode row ${i}"><option value="-1">—</option>${OPC.map((o,k)=>`<option value="${k}" ${p.op===k?'selected':''}>${o}</option>`).join('')}</select></td><td><input type="number" id="mp-a-${i}" data-pa="${i}" value="${p.a}" ${p.op<0?'disabled':''} aria-label="address row ${i}"></td><td class="m wd"></td><td class="mk"></td></tr>`).join('')+
+      Object.keys(DATA).map(a=>`<tr data-ma="${a}"><td class="m">${a}</td><td></td><td class="muted">data</td><td><input type="number" id="mp-d-${a}" data-pd="${a}" value="${DATA[a]}" aria-label="data ${a}"></td><td class="m wd"></td><td class="mk"></td></tr>`).join('');}
+  $$('#mpMem tr[data-ma]').forEach(tr=>{const a=+tr.dataset.ma,v=rd(a);tr.querySelector('.wd').textContent=hex(v,4)+(a>=100?` (${s16(v)})`:'');
+    tr.querySelector('.mk').innerHTML=(a===MP.PC&&!MP.halted?'◂PC ':'')+(a===MP.AR?'◂AR':'');
+    tr.classList.toggle('sel',a===MP.PC&&!MP.halted);tr.classList.toggle('sel2',a===MP.AR&&a!==MP.PC);
+    if(mpChanged.includes('M'+a))flash(tr.querySelector('.wd'));});
+  $('#mpLog').innerHTML=MP.log.length?MP.log.map(l=>`<div style="white-space:pre">${l}</div>`).join(''):'<div>Press Step micro</div>';
+  $('#mpStep').disabled=$('#mpInstr').disabled=MP.halted;
+}
+
+/* ================= QUIZ ================= */
+const QZ=[
+ {q:'A two-word instruction is at 300–301 with address field 400. In relative mode, what is the EA?',o:['400','700','702','302'],k:2,w:'PC is 302 after fetching both words, so EA = 302 + 400 = 702.'},
+ {q:'Which mode changes the register after it has been used?',o:['Register indirect','Autoincrement','Autodecrement','Indexed'],k:1,w:'Autoincrement uses R1 as the EA, then adds 1. Autodecrement subtracts first.'},
+ {q:'Which mask clears the low 4 bits of a byte with AND?',o:['0000 1111','1111 0000','1111 1111','0000 0000'],k:1,w:'AND with 0 clears, with 1 keeps. 1111 0000 keeps the high bits and clears the low 4.'},
+ {q:'SHRA on 1000 0100 gives:',o:['0100 0010','1100 0010','0000 1000','0100 0011'],k:1,w:'Arithmetic shift right copies the sign bit (1) into bit 7.'},
+ {q:'The overflow bit V equals:',o:['C8','F7','C7 ⊕ C8','C7 · C8'],k:2,w:'Overflow happens when the carry into bit 7 and the carry out of it differ.'},
+ {q:'How is CMP different from SUB?',o:['It adds instead','It does not store the result, only sets status bits','It changes PC','It works only on memory'],k:1,w:'CMP computes A − B only to set the status bits for a later branch.'},
+ {q:'After A − B with A = 20, B = 240 (unsigned), C is 0. What does that tell you?',o:['A ≥ B','A < B','A = B','Overflow'],k:1,w:'With subtraction done as A + B′ + 1, C = 0 means a borrow occurred, so A < B.'},
+ {q:'Which is a RISC feature?',o:['Variable-length instructions','Only load and store access memory','Microprogrammed control','5 to 20 addressing modes'],k:1,w:'RISC is a load/store architecture; the others describe CISC.'},
+ {q:'Which control unit is faster but harder to change?',o:['Microprogrammed','Hardwired'],k:1,w:'Hardwired uses gates and decoders directly; changes need a redesign.'},
+ {q:'In the example, the EXCHANGE opcode 0011 is mapped to control address:',o:['3','12','48','64'],k:1,w:'Mapping gives 0 0011 00 = 12.'},
+ {q:'The control data register (CDR) is also called the:',o:['Pipeline register','Subroutine register','Address register','Status register'],k:0,w:'CDR holds the current microinstruction and is also called the pipeline register.'},
+ {q:'In the sequencer, L = 1 (load SBR) when:',o:['BR = RET','BR = CALL and T = 1','BR = MAP','BR = JMP and T = 1'],k:1,w:'L = I1′·I0·T: only a taken CALL saves the return address.'},
+];
+let QA={};try{QA=JSON.parse(localStorage.getItem(KEY+'-quiz')||'{}')}catch(e){}
+
+/* ================= NAV (same as the practicals site) ================= */
+const idx=id=>SECTIONS.findIndex(s=>s.id===id);
+let cur=SECTIONS[0].id;
+function renderToc(){let g=null,h='';
+  SECTIONS.forEach(s=>{if(s.group!==g){if(g!==null)h+='</ol>';g=s.group;h+=`<h4>${g}</h4><ol>`;}
+    h+=`<li><a href="#${s.id}" ${s.id===cur?'aria-current="page"':''}><span class="tick">${SEEN[s.id]?'&#10003;':''}</span>${s.title}</a></li>`;});
+  $('#toc').innerHTML=h+'</ol>';}
+function go(id){if(location.hash!=='#'+id)location.hash=id;else show(id);}
+function show(id){
+  if(idx(id)<0)id=SECTIONS[0].id;cur=id;const i=idx(id),s=SECTIONS[i];
+  pcStop();mpStop();
+  SEEN[id]=1;try{localStorage.setItem(KEY+'-seen',JSON.stringify(SEEN))}catch(e){}
+  const m=$('#main');
+  m.innerHTML=`<section class="sec${s.wide?' wide':''}" id="sec"></section><nav class="pager" aria-label="Page navigation">
+    <button class="btn ghost" id="prv" ${i===0?'disabled':''}>&larr; Previous</button>
+    <div class="mid">${i+1} of ${SECTIONS.length}<br><span>Use &larr; &rarr; keys</span></div>
+    <button class="btn" id="nxt" ${i===SECTIONS.length-1?'disabled':''}>Next &rarr;</button></nav>`;
+  s.render($('#sec'));
+  $('#prv').onclick=()=>go(SECTIONS[i-1].id);$('#nxt').onclick=()=>go(SECTIONS[i+1].id);
+  $('#progBar').style.width=((i+1)/SECTIONS.length*100)+'%';
+  renderToc();document.body.classList.remove('toc-open');window.scrollTo(0,0);
+}
+addEventListener('hashchange',()=>show(location.hash.slice(1)));
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b){e.preventDefault();go(b.dataset.go);}});
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.altKey||e.ctrlKey||e.metaKey)return;const i=idx(cur);
+  if(e.key==='ArrowRight'&&i<SECTIONS.length-1)go(SECTIONS[i+1].id);if(e.key==='ArrowLeft'&&i>0)go(SECTIONS[i-1].id);});
+$('#menuBtn').onclick=()=>document.body.classList.toggle('toc-open');
+$('#scrim').onclick=()=>document.body.classList.remove('toc-open');
+$('#themeBtn').onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark';try{localStorage.setItem(KEY+'-theme',r.dataset.theme)}catch(e){}};
+try{const th=localStorage.getItem(KEY+'-theme');if(th)document.documentElement.dataset.theme=th;}catch(e){}
+show(location.hash.slice(1)||SECTIONS[0].id);
+</script>
+
+</body>
+</html>
