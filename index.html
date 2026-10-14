@@ -250,6 +250,16 @@ ol.steps li{margin-bottom:3px}
 .scorebar{display:flex;gap:18px;align-items:baseline;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 16px;margin:0 0 12px;flex-wrap:wrap}
 .scorebar b{font-family:var(--serif);font-size:26px;color:var(--blue)}
 details summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:15px}
+.calcbox{border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:12px 16px;margin-top:14px}
+.calcbox h4{margin:0 0 8px;font-size:16px;color:var(--blue-ink)}
+.calcbox ol{margin:0;padding-left:22px}
+.calcbox ol>li{margin-bottom:8px}
+.calcbox ul{margin:4px 0 0;padding-left:20px}
+pre.calc{font-family:var(--mono);font-size:15px;background:var(--surface);border-radius:8px;padding:10px 14px;margin:8px 0;overflow-x:auto;line-height:1.45}
+.calcbox .tbl-wrap{margin:8px 0}
+.calcbox table.t{font-size:14px}
+.calcbox table.t td,.calcbox table.t th{padding:4px 10px}
+.calcbox .concl{background:var(--blue-soft);border-radius:8px;padding:8px 12px;margin-top:6px}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:12px;max-width:900px;margin-top:44px;padding-top:18px;border-top:1px solid var(--line)}
 .pager .mid{color:var(--muted);font-size:14px;text-align:center}
 @media (max-width:980px){
@@ -300,6 +310,190 @@ const tryBox=(title,sub,body)=>`<div class="try"><div class="try-h"><span class=
 const seg=(opts,cur,id)=>`<div class="seg" role="group" id="${id}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${String(v)===String(cur)}">${l}</button>`).join('')}</div>`;
 function bindSeg(el,fn){el.addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;$$('button',el).forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v);});}
 const tbl=(head,rows)=>`<div class="tbl-wrap"><table class="t"><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===0?' class="m"':''}>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
+
+/* ---------- step-by-step calculation helpers ---------- */
+const bin8=v=>grp(binN(v,8));
+const calcBox=(t,inner)=>`<div class="calcbox"><h4>${t}</h4>${inner}</div>`;
+function stepAdd(a,b,cin,{la='A',lb='B'}={}){
+  let c=cin,r=0,rows='';const car=[cin];
+  for(let i=0;i<8;i++){const x=(a>>i)&1,y=(b>>i)&1,s=x+y+c,o=s&1,co=s>>1;r|=o<<i;
+    rows+=`<tr${i===7?' class="sel"':''}><td class="m">${i}</td><td class="m">${x}</td><td class="m">${y}</td><td class="m">${c}</td><td class="m">${x}+${y}+${c} = ${s}</td><td class="m"><b>${o}</b></td><td class="m">${co}${i===7?' (this is C8)':''}</td></tr>`;c=co;car.push(c);}
+  return{r,c,car,html:`<div class="tbl-wrap"><table class="t"><tr><th>Bit</th><th>${la}</th><th>${lb}</th><th>Carry in</th><th>Sum</th><th>Write</th><th>Carry out</th></tr>${rows}</table></div>`};
+}
+function colView(a,b,cin,r,cout,la,lb,cl){
+  return `<pre class="calc">    ${bin8(a)}   ${la}\n  + ${bin8(b)}   ${lb}${cin?'\n  +         1   carry in':''}\n  -----------\n  ${cout} ${bin8(r)}   result = ${r}\n  ↑\n  ${cl||'C = '+cout}</pre>`;
+}
+function bitOpTable(v,m,op){
+  const why={AND:['mask 0 → cleared','mask 1 → kept'],OR:['mask 0 → kept','mask 1 → set to 1'],XOR:['mask 0 → kept','mask 1 → flipped']};
+  const r=LGOPS[op](v,m),nm=op==='CLR'||op==='COM';let rows='';
+  for(let i=7;i>=0;i--){const x=(v>>i)&1,y=(m>>i)&1,o=(r>>i)&1;
+    const w=op==='CLR'?'cleared':op==='COM'?'inverted':why[op][y];
+    rows+=`<tr${x!==o?' class="sel2"':''}><td class="m">${i}</td><td class="m">${x}</td>${nm?'':`<td class="m">${y}</td>`}<td class="m"><b>${o}</b></td><td>${w}${x!==o?' (changed)':''}</td></tr>`;}
+  return `<div class="tbl-wrap"><table class="t"><tr><th>Bit</th><th>Operand</th>${nm?'':'<th>Mask</th>'}<th>Result</th><th>Why</th></tr>${rows}</table></div>`;
+}
+function logicCalc(v,m,op,r){
+  const nm=op==='CLR'||op==='COM';
+  return calcBox('Step-by-step calculation',`<ol><li>Line up the operand ${bin8(v)}${nm?'':' and the mask '+bin8(m)} bit by bit.</li>
+<li>Apply ${op} to each bit on its own:${bitOpTable(v,m,op)}</li>
+<li>Result: ${bin8(r)} = ${r} (hex ${hex(r)}). The blue rows are the bits that changed.</li></ol>`);
+}
+function arithCalc(k,B){
+  const a=B.AC,b=B.R1,d=v=>`${v} = ${bin8(v)}`;let h='',c='';
+  if(k==='ADD'||k==='ADDC'){
+    const cin=k==='ADDC'?B.C:0,S=stepAdd(a,b,cin,{la:'AC',lb:'R1'}),t=a+b+cin;
+    h=`<li>Write both numbers in 8-bit binary: AC = ${d(a)}, R1 = ${d(b)}${k==='ADDC'?`. ADDC also adds the old carry, C = ${cin}`:''}.</li>
+<li>Add column by column, starting at bit 0. A sum of 2 writes 0 and carries 1; a sum of 3 writes 1 and carries 1.${S.html}</li>
+<li>The same addition written out:${colView(a,b,cin,S.r,S.c,'AC = '+a,'R1 = '+b)}</li>
+<li>Decimal check: ${a} + ${b}${cin?' + 1':''} = ${t}. ${t>255?`That is more than 255, so it does not fit in 8 bits. AC keeps ${t} − 256 = ${S.r}, and the 256 leaves bit 7 as <b>C = 1</b>.`:`That fits in 8 bits (at most 255), so nothing leaves bit 7: <b>C = 0</b>.`}</li>`;
+    c='For ADD, C = 1 means the unsigned result was too big for 8 bits.';
+  }else if(k==='SUB'||k==='SUBB'){
+    const cin=k==='SUBB'?B.C:1,bc=(~b)&255,S=stepAdd(a,bc,cin,{la:'AC',lb:'R1′'}),t=a+bc+cin;
+    const bor=1-cin,real=a-b-(k==='SUBB'?bor:0),expr=`${a} − ${b}${k==='SUBB'&&bor?' − 1':''}`;
+    h=`<li>The ALU has no subtractor, so it adds instead: ${k==='SUB'?'AC − R1 = AC + R1′ + 1':'AC − R1 − borrow = AC + R1′ + C, where borrow = C′'}.</li>
+<li>Write the numbers in binary: AC = ${d(a)}, R1 = ${d(b)}.</li>
+<li>Complement R1 (flip every bit): R1′ = ${bin8(bc)}.${k==='SUB'?` R1′ + 1 = ${bin8((bc+1)&255)} is the 2's complement of R1, worth 256 − ${b} = ${256-b}.`:` The carry in is the old C = ${cin}, so borrow = ${bor}.`}</li>
+<li>Add AC + R1′ with carry in = ${cin} (it enters at bit 0):${S.html}</li>
+<li>The same addition written out:${colView(a,bc,cin,S.r,S.c,'AC = '+a,'R1′')}</li>
+<li>Decimal check: the ALU computed ${a} + ${bc} + ${cin} = ${t}${t>255?` = 256 + ${t-256}. The 256 leaves bit 7 as <b>C = 1</b> and AC keeps ${S.r}. C = 1 means <b>no borrow</b>: ${expr} = ${real} is not negative.`:`, which is less than 256, so nothing leaves bit 7: <b>C = 0</b>. C = 0 means <b>a borrow</b>: ${expr} = ${real} is negative, and AC = ${S.r} is its 8-bit pattern (256 − ${-real}).`}</li>`;
+    c='For SUB, C = 1 means no borrow (AC ≥ R1). C = 0 means a borrow happened (AC < R1).';
+  }else if(k==='INC'||k==='DEC'){
+    const y=k==='INC'?1:255,S=stepAdd(a,y,0,{la:'AC',lb:k==='INC'?'+1':'−1'}),e=k==='INC'?a+1:a-1;
+    h=`<li>AC = ${d(a)}. ${k==='INC'?'INC adds 0000 0001.':"DEC adds 1111 1111, which is −1 in 2's complement."}${S.html}</li>
+<li>Written out:${colView(a,y,0,S.r,S.c,'AC = '+a,k==='INC'?'+1':'−1',`carry out = ${S.c}  (ignored: C flag stays ${B.C})`)}</li>
+<li>Decimal check: ${a} ${k==='INC'?'+':'−'} 1 = ${e}${S.r!==e?`, which wraps round to ${S.r} in 8 bits`:''}.</li>
+<li>Carry out of bit 7 = ${S.c}. ${k==='DEC'?(S.c?`This is not an overflow. Adding 1111 1111 means adding 255 = 256 − 1, so for any AC of 1 or more the sum passes 256: ${a} + 255 = ${a+255} = 256 + ${S.r}. The 256 is the carry; it only says "no borrow", because ${a} ≥ 1.`:`No carry, because AC was 0: 0 + 255 = 255 stays below 256. That means a borrow: 0 − 1 wraps round to 255.`):(S.c?`AC was 255, so 255 + 1 = 256 wraps round to 0 and the 256 leaves bit 7.`:`No carry: ${a} + 1 stays below 256.`)}</li>
+<li><b>The C flag is not changed by ${k}.</b> The carry out above stays inside the ALU and is thrown away, so C keeps its old value: <b>C = ${B.C}</b>.</li>`;
+    c=`Why: INC and DEC are mostly used for loop counters and pointers. If they changed C, a counter update in the middle of a multi-byte ADDC / SUBB chain would destroy the carry that chain still needs. Many real processors (Intel x86, for example) also leave the carry flag alone on INC and DEC. Compare: <b>SUB AC, R1</b> with R1 = 1 gives the same 8-bit result, but it does copy the carry into C.`;
+  }else if(k==='NEG'){
+    const ac=(~a)&255,S=stepAdd(ac,1,0,{la:'AC′',lb:'+1'});
+    h=`<li>AC = ${d(a)}.</li><li>Flip every bit: AC′ = ${bin8(ac)}.</li><li>Add 1:${S.html}</li>
+<li>Written out:${colView(ac,1,0,S.r,S.c,'AC′','+1')}</li>
+<li>Decimal check: 256 − ${a} = ${256-a}${a===0?', which is 0 in 8 bits':''}. As signed numbers, ${s8(a)} becomes ${s8(S.r)}${a===128?' (−128 has no positive partner in 8 bits)':''}.</li>`;
+    c="NEG gives the 2's complement: flip all bits, then add 1.";
+  }else if(k==='MUL'){
+    const p=a*b;let rows='',parts=[];
+    for(let i=0;i<8;i++)if((b>>i)&1){parts.push(a<<i);rows+=`<li>Bit ${i} of R1 is 1 → add AC shifted left ${i} places = ${a} × ${1<<i} = ${a<<i}</li>`;}
+    h=`<li>AC = ${d(a)}, R1 = ${d(b)}.</li><li>Shift and add: for every 1-bit of R1, add a copy of AC shifted left by that bit's position.<ul>${rows||'<li>R1 has no 1-bits, so the product is 0</li>'}</ul></li>
+<li>Add the partial products: ${parts.join(' + ')||'0'} = ${p}.</li>
+<li>The product needs 16 bits: ${p} = ${grp(binN(p,16))}. High byte → R2 = ${bin8(p>>8)} = ${p>>8}. Low byte → AC = ${bin8(p&255)} = ${p&255}.</li>
+<li>Check: R2 × 256 + AC = ${p>>8} × 256 + ${p&255} = ${p}.</li>`;
+    c='An 8-bit × 8-bit product can need up to 16 bits, so it is split across R2 (high byte) and AC (low byte).';
+  }else if(k==='DIV'){
+    const q=Math.floor(a/b),rm=a%b;
+    h=`<li>AC = ${d(a)}, R1 = ${d(b)}.</li><li>How many times does ${b} fit into ${a}? ${q} times, because ${b} × ${q} = ${b*q}${q?` and ${b} × ${q+1} = ${b*(q+1)} is too big`:''}.</li><li>Remainder: ${a} − ${b*q} = ${rm}.</li>
+<li>Quotient → AC = ${d(q)}. Remainder → R2 = ${d(rm)}.</li><li>Check: ${b} × ${q} + ${rm} = ${b*q+rm}, the old AC.</li>`;
+    c='Integer division gives two results: the quotient (AC) and the remainder (R2).';
+  }
+  return calcBox('Step-by-step calculation',`<ol>${h}</ol><div class="concl">${c}</div>`);
+}
+function machineCalc(o,B,A,ch){
+  const k=o.l.split(' ')[0];
+  if(o.g==='A')return arithCalc(k,B);
+  const nm={AC:'AC',R1:'R1',R2:'R2',M10:'M[10]',M11:'M[11]',OUT:'Output port',IN:'Input port'};
+  const src={LD:'M10',ST:'AC',MOV:'AC',IN:'IN',OUT:'AC',PUSH:'AC'}[k];
+  let li=ch.filter(x=>x!=='stack').map(x=>`<li>${nm[x]}: ${B[x]===null?'—':B[x]} → <b>${A[x]}</b> (${bin8(A[x])})</li>`).join('');
+  if(k==='PUSH')li+=`<li>Stack: ${B.stack.length} → ${A.stack.length} words. New top = ${A.AC} (${bin8(A.AC)}).</li>`;
+  if(k==='POP')li+=`<li>Stack: ${B.stack.length} → ${A.stack.length} words. The old top word ${A.R2} was removed.</li>`;
+  const note=k==='XCH'?'Both values move at once: the old AC goes to R1 and the old R1 goes to AC.':k==='POP'?'POP copies the top word into R2 and removes it from the stack.':`The source, ${nm[src]}, still holds ${B[src]}: a transfer copies the bits without changing them.`;
+  return calcBox('What changed',`<ol>${li}</ol><div class="concl">${note}</div>`);
+}
+function aluCalc(a,b,op){
+  if(op==='TST'){const r=a&b;return calcBox('Step-by-step calculation',`<ol><li>TST does A AND B bit by bit (1 only where both bits are 1):${bitOpTable(a,b,'AND')}</li><li>The result ${bin8(r)} is not stored. Only the flags are kept.</li>
+<li>S = left-most result bit = <b>${r>>7}</b>. Z = <b>${r?0:1}</b>, because the result ${r?'is not':'is'} 0000 0000. C and V are cleared.</li></ol>`);}
+  const sub=op!=='ADD',bb=sub?(~b)&255:b,cin=sub?1:0,S=stepAdd(a,bb,cin,{la:'A',lb:sub?'B′':'B'}),C7=S.car[7],C8=S.car[8];
+  return calcBox('Step-by-step calculation',`<ol>
+${sub?`<li>Subtract by adding: A − B = A + B′ + 1. A = ${bin8(a)} (${a}), B = ${bin8(b)} (${b}), so B′ = ${bin8(bb)}. The +1 goes in as the carry into bit 0.</li>`:`<li>A = ${bin8(a)} (${a}), B = ${bin8(b)} (${b}). No carry in.</li>`}
+<li>Add column by column. Watch the last two carries: C7 is the carry <i>into</i> bit 7 (out of bit 6), C8 is the carry <i>out of</i> bit 7.${S.html}</li>
+<li>Written out:${colView(a,bb,cin,S.r,S.c,'A = '+a,sub?'B′':'B = '+b)}</li>
+<li>Read the flags from the table:<ul><li>C = C8 = <b>${C8}</b></li><li>S = F7, the left-most result bit = <b>${S.r>>7}</b></li><li>Z = <b>${S.r?0:1}</b>, because the result ${S.r?'is not':'is'} 0000 0000</li><li>V = C7 ⊕ C8 = ${C7} ⊕ ${C8} = <b>${C7^C8}</b>${C7^C8?' (the two carries differ, so the signed result is wrong)':' (the two carries agree, so the signed result is right)'}</li></ul></li>
+</ol>${op==='CMP'?'<div class="concl">CMP does all of this but throws the result away. Only the four flags are kept.</div>':''}`);
+}
+function shiftCalc(k,old,oc,res,V){
+  const right=['SHR','SHRA','ROR','RORC'].includes(k),r=res.r,so=s8(old),sr=s8(r);
+  const enter={SHR:'0',SHL:'0',SHRA:`old bit 7 = ${old>>7} (the sign is copied)`,SHLA:'0',ROR:`old bit 0 = ${old&1} (rotated round)`,ROL:`old bit 7 = ${old>>7} (rotated round)`,RORC:`the old C = ${oc}`,ROLC:`the old C = ${oc}`}[k];
+  const leave={SHR:'is lost',SHL:'is lost',SHRA:'is lost',SHLA:'is lost',ROR:'goes round to bit 7',ROL:'goes round to bit 0',RORC:'goes into C',ROLC:'goes into C'}[k];
+  let dec;
+  if(k==='SHR')dec=`Unsigned: ${old} ÷ 2 = ${Math.floor(old/2)} remainder ${old&1}. The remainder is the bit that fell off.`;
+  else if(k==='SHL')dec=`Unsigned: ${old} × 2 = ${old*2}${old*2>255?`, more than 255, so only ${old*2} − 256 = ${r} fits in 8 bits`:''}.`;
+  else if(k==='SHRA')dec=`Signed: ${so} ÷ 2 = ${so/2} → ${sr} (rounded down). Copying the sign bit keeps the number ${so<0?'negative':'positive'}.`;
+  else if(k==='SHLA')dec=`Signed: ${so} × 2 = ${so*2}. ${so*2<-128||so*2>127?`That is outside −128…127, so the 8-bit result (${sr}) is wrong and V = 1: bit 7 changed from ${old>>7} to ${r>>7}.`:`That fits in −128…127, so V = 0: bit 7 stayed ${r>>7}.`}`;
+  else dec='A rotate only rearranges the bits. Nothing is lost, so it has no arithmetic meaning.';
+  return calcBox('Step-by-step calculation',`<ol>
+<li>Start: ${bin8(old)} (${old}${so<0?', signed '+so:''}), C = ${oc}.</li>
+<li>Every bit moves one place ${right?'right: bit 7 → 6, 6 → 5, … 1 → 0':'left: bit 0 → 1, 1 → 2, … 6 → 7'}.</li>
+<li>The ${right?'right-most bit (bit 0)':'left-most bit (bit 7)'} = ${right?old&1:old>>7} ${leave}.</li>
+<li>The empty ${right?'bit 7':'bit 0'} is filled with ${enter}.</li>
+<li>Result: ${bin8(r)} (${r}${sr<0?', signed '+sr:''})${k.endsWith('C')?`, and now C = ${res.c}`:''}${k==='SHLA'?`, V = ${V}`:''}.</li>
+<li>${dec}</li></ol>`);
+}
+function seqCalc(I1,I0,T,S1,S0,L,sel,c,CAR,op){
+  return calcBox('Step-by-step calculation',`<ol>
+<li>Inputs: I1 I0 = ${I1}${I0} (from BR) and T = ${T} (the bit chosen by CD). So I1′ = ${1-I1}.</li>
+<li>S1 = I1 = <b>${S1}</b></li>
+<li>S0 = I1·I0 + I1′·T = ${I1}·${I0} + ${1-I1}·${T} = ${I1&I0} + ${(1-I1)&T} = <b>${S0}</b></li>
+<li>L = I1′·I0·T = ${1-I1}·${I0}·${T} = <b>${L}</b></li>
+<li>S1 S0 = ${S1}${S0} = ${sel}, so MUX 1 passes input ${sel}, ${['CAR + 1','AD','SBR','MAP'][sel]} = <b>${c[sel]}</b>.${sel===0?` (${CAR} + 1 = ${CAR+1})`:''}${sel===3?` Mapping puts opcode ${binN(op,4)} into CAR(2–5): 0 ${binN(op,4)} 00 = ${op} × 4 = ${op<<2}.`:''}</li>
+${L?`<li>L = 1, so SBR is loaded with the return address: CAR + 1 = ${CAR} + 1 = ${CAR+1}.</li>`:''}</ol>`);
+}
+function wordCalc(W){const w=(W.I<<15)|(W.op<<11)|W.a;
+  return calcBox('Step-by-step calculation',`<ol>
+<li>Join the three fields: I = ${W.I} | opcode = ${binN(W.op,4)} | address = ${binN(W.a,11)}.</li>
+<li>16-bit word: ${grp(binN(w,16))}. Each group of 4 bits is one hex digit: ${grp(binN(w,16)).split(' ').map(g=>g+' = '+parseInt(g,2).toString(16).toUpperCase()).join(', ')}, so the word is ${hex(w,4)} hex.</li>
+<li>Address field: ${binN(W.a,11)} = ${W.a} in decimal.${W.I?` I = 1, so the CPU first reads M[${W.a}] to get the real address.`:''}</li>
+<li>Mapping: CAR(2–5) ← opcode, and the other CAR bits ← 0. So CAR = 0 ${binN(W.op,4)} 00 = ${W.op} × 4 = <b>${W.op<<2}</b>${W.op<4?`, the start of the ${OPC[W.op]} routine`:''}.</li></ol>`);}
+function numOps(m,o,n){const out=[];
+  for(const op of [m.f1,m.f2,m.f3])switch(op){
+    case'PCTAR':out.push(`AR ← PC = ${o.PC}`);break;
+    case'READ':out.push(`DR ← M[${o.AR}] = ${hex(n.DR,4)} hex (${s16(n.DR)})`);break;
+    case'INCPC':out.push(`PC ← ${o.PC} + 1 = ${n.PC}`);break;
+    case'DRTAR':out.push(`AR ← DR(0–10) = ${binN(o.DR&0x7FF,11)} = ${n.AR}`);break;
+    case'ADD':out.push(`AC ← AC + DR = ${s16(o.AC)} + ${s16(o.DR)} = ${s16(n.AC)}`);break;
+    case'ACTDR':out.push(`DR ← AC = ${s16(o.AC)}`);break;
+    case'DRTAC':out.push(`AC ← DR = ${s16(o.DR)}`);break;
+    case'WRITE':out.push(`M[${o.AR}] ← DR = ${s16(o.DR)}`);break;
+    case'ARTPC':out.push(`PC ← AR = ${o.AR}`);break;}
+  return out;}
+
+/* ---------- arithmetic practice ---------- */
+const MB={x:300,y:500,op:'ADD',step:1};
+function mbSteps(x,y,op){
+  const lx=x&255,hx=x>>8,ly=y&255,hy=y>>8,sub=op==='SUB',cly=sub?(~ly&255):ly,chy=sub?(~hy&255):hy;
+  const L=stepAdd(lx,cly,sub?1:0,{la:'X low',lb:sub?'Y low′':'Y low'});
+  const H=stepAdd(hx,chy,L.c,{la:'X high',lb:sub?'Y high′':'Y high'});
+  const W=stepAdd(hx,chy,sub?1:0);
+  const res=(H.r<<8)|L.r,wrong=(W.r<<8)|L.r,truth=sub?x-y:x+y,wrapped=((truth%65536)+65536)%65536;
+  const hiExp=sub?hx-hy-(1-L.c):hx+hy+L.c;
+  return[
+  calcBox('Step 1 · Split each number into two bytes',`<div class="tbl-wrap"><table class="t"><tr><th></th><th>Decimal</th><th>High byte</th><th>Low byte</th><th>Check</th></tr>
+<tr><td>X</td><td class="m">${x}</td><td class="m">${bin8(hx)} (${hx})</td><td class="m">${bin8(lx)} (${lx})</td><td class="m">${hx} × 256 + ${lx} = ${x}</td></tr>
+<tr><td>Y</td><td class="m">${y}</td><td class="m">${bin8(hy)} (${hy})</td><td class="m">${bin8(ly)} (${ly})</td><td class="m">${hy} × 256 + ${ly} = ${y}</td></tr></table></div>
+<p class="note" style="margin:0">High byte = number ÷ 256 (whole part). Low byte = the remainder.</p>`),
+  calcBox(`Step 2 · Low bytes with ${sub?'SUB':'ADD'}`,`<ol>${sub?`<li>SUB adds the complement with carry in 1: Y low′ = ${bin8(cly)}.</li>`:'<li>This is the first byte, so no carry comes in.</li>'}
+<li>Bit by bit:${L.html}</li><li>Written out:${colView(lx,cly,sub?1:0,L.r,L.c,'X low = '+lx,sub?'Y low′':'Y low = '+ly)}</li>
+<li>${sub?`${lx} − ${ly} ${lx>=ly?`= ${lx-ly}: no borrow, so <b>C = 1</b>.`:`is negative, so the byte wraps to ${L.r} (= ${lx} + 256 − ${ly}) and a borrow is needed: <b>C = 0</b>.`}`:`${lx} + ${ly} = ${lx+ly}${lx+ly>255?`, more than 255. The byte keeps ${lx+ly} − 256 = ${L.r}, and <b>C = 1</b> carries the 256 up to the high byte.`:`, which fits in one byte: <b>C = 0</b>.`}`}</li></ol>`),
+  calcBox(`Step 3 · High bytes with ${sub?'SUBB':'ADDC'}, using C = ${L.c} from step 2`,`<ol>${sub?`<li>SUBB computes X high + Y high′ + C. If step 2 needed a borrow (C = 0), this takes 1 more away. Y high′ = ${bin8(chy)}.</li>`:`<li>ADDC adds the carry from step 2: C = ${L.c} enters at bit 0.</li>`}
+<li>Bit by bit:${H.html}</li><li>Written out:${colView(hx,chy,L.c,H.r,H.c,'X high = '+hx,sub?'Y high′':'Y high = '+hy)}</li>
+<li>${sub?`${hx} − ${hy} − ${1-L.c} (borrow) = ${hiExp}`:`${hx} + ${hy} + ${L.c} (carry) = ${hiExp}`}${H.r!==hiExp?`, which wraps to ${H.r} in 8 bits`:''}.</li></ol>`),
+  calcBox('Step 4 · Put the bytes together',`<ol><li>Result = high × 256 + low = ${H.r} × 256 + ${L.r} = <b>${res}</b>.</li>
+<li>Decimal check: ${x} ${sub?'−':'+'} ${y} = ${truth}${truth<0?`, negative, so the 16-bit pattern is 65536 − ${-truth} = ${wrapped}`:truth>65535?`, too big for 16 bits, so it wraps to ${wrapped} and a carry leaves the high byte`:''}.${wrapped===res?' It matches.':''}</li>
+<li>The wrong way, using ${sub?'SUB':'ADD'} for the high byte as well: ${W.r} × 256 + ${L.r} = ${wrong}. ${wrong===res?`Same answer here, because the low byte had no ${sub?'borrow':'carry'}. Try 300 + 500 to see the difference.`:`That is wrong by 256: the ${sub?'borrow':'carry'} from the low byte was lost.`}</li></ol>
+<div class="concl">${sub?'SUB for the lowest byte, SUBB for every byte above it.':'ADD for the lowest byte, ADDC for every byte above it.'}</div>`)];
+}
+const PQHINT={ADD:'if the sum is more than 255, subtract 256 and set C = 1; otherwise C = 0.',SUB:'compute AC + R1′ + 1. C = 1 means no borrow (AC ≥ R1); C = 0 means a borrow.',ADDC:'add the old C as well: AC + R1 + C.',SUBB:'SUBB takes away one more when C = 0 (borrow = C′). C afterwards: 1 = no borrow.',INC:'INC does not change C.',DEC:'DEC does not change C, and 0 − 1 wraps round to 255.',NEG:'flip every bit, then add 1. NEG does not change C.',MUL:'the 16-bit product is split: R2 = high byte, AC = low byte.',DIV:'AC gets the quotient and R2 the remainder.',W16:'low byte with ADD, then high byte with ADDC (add the carry from the low byte).'};
+const pqFields=k=>k==='W16'?['low','C','high']:(k==='MUL'||k==='DIV')?['AC','R2']:['AC','C'];
+function pqPrompt(q){const s=q.s;
+  if(q.k==='W16')return`On an 8-bit machine, add <b>${s.x} + ${s.y}</b> using ADD for the low bytes and ADDC for the high bytes. Give the low byte, C after the ADD, and the high byte.`;
+  const o=OPS2.find(x=>x.l.split(' ')[0]===q.k);const usesR1=!['INC','DEC','NEG'].includes(q.k);
+  return`AC = ${s.AC}${usesR1?`, R1 = ${s.R1}`:''}, C = ${s.C}. Execute <b>${o.l}</b>. What ${q.k==='MUL'||q.k==='DIV'?'are AC and R2':'are AC and C'} afterwards?`;}
+function pqAnswer(q){const s=q.s;
+  if(q.k==='W16'){const lo=(s.x&255)+(s.y&255),c=lo>255?1:0;return{low:lo&255,C:c,high:((s.x>>8)+(s.y>>8)+c)&255};}
+  const o=OPS2.find(x=>x.l.split(' ')[0]===q.k);const save=X2;X2={...structuredClone(X2init),R2:0,...s};o.f(X2);const r={AC:X2.AC,C:X2.C,R2:X2.R2};X2=save;return r;}
+function pqWorking(q){const key=pqAnswer(q);
+  const body=q.k==='W16'?mbSteps(q.s.x,q.s.y,'ADD').join(''):arithCalc(q.k,{...structuredClone(X2init),R2:0,...q.s});
+  return body+`<p class="note"><b>Answer:</b> ${pqFields(q.k).map(f=>`${f} = ${key[f]}`).join(', ')}</p>`;}
+const PQ=[['ADD',{AC:200,R1:100,C:0}],['SUB',{AC:50,R1:80,C:0}],['ADDC',{AC:10,R1:20,C:1}],['SUBB',{AC:10,R1:3,C:0}],['DEC',{AC:0,R1:0,C:1}],['NEG',{AC:5,R1:0,C:0}],['MUL',{AC:20,R1:15,C:0}],['DIV',{AC:100,R1:7,C:0}],['W16',{x:1000,y:600}]].map(([k,s])=>({k,s,ans:{},res:null,show:false}));
+function pqRandom(){const ks=['ADD','SUB','ADDC','SUBB','INC','DEC','NEG','MUL','DIV','W16'];const k=ks[Math.floor(Math.random()*ks.length)];const R=n=>Math.floor(Math.random()*n);
+  const s=k==='W16'?{x:256+R(2800),y:256+R(2800)}:{AC:R(256),R1:k==='DIV'?1+R(20):1+R(255),C:R(2)};return{k,s,ans:{},res:null,show:false};}
 
 function makeSort(box,items,A,B){
   let order=items.map((x,i)=>i).sort(()=>Math.random()-.5);let ans={};
@@ -356,7 +550,7 @@ const SECTIONS=[
   <p class="lead">Every topic in this unit as a page you can play with. Each page starts with a few lines of theory, then a <b>Try it</b> bench where you click, change a value and watch what the machine does.</p>
   <div class="row" style="margin:6px 0 26px"><button class="btn" data-go="am-modes">Start the session</button><button class="btn ghost" data-go="mp-run">Jump to the simulator</button></div>
   <h3>Plan</h3>
-  <ol class="plan">${[['am-modes','Addressing modes','Nine ways to find the operand, plus the practice problem'],['xfer','Instruction types','Data transfer, arithmetic, logic and masks, shifts'],['pc-ctrl','Program control','Branch, call and return, status bits, conditional branches'],['risc','RISC and CISC','Two design styles compared, then sort the features'],['hw-micro','Control unit','Hardwired vs microprogrammed, control memory, CAR and CDR'],['mp-config','Microprogram example','Instruction format, microinstruction format, sequencer, full run'],['quiz','Exit quiz','12 quick questions with instant feedback']].map((r,i)=>`<li><a href="#${r[0]}"><span class="n">${i+1}</span><b>${r[1]}</b><span>${r[2]}</span></a></li>`).join('')}</ol>
+  <ol class="plan">${[['am-modes','Addressing modes','Nine ways to find the operand, plus the practice problem'],['xfer','Instruction types','Data transfer, arithmetic with practice problems, logic and masks, shifts'],['pc-ctrl','Program control','Branch, call and return, status bits, conditional branches'],['risc','RISC and CISC','Two design styles compared, then sort the features'],['hw-micro','Control unit','Hardwired vs microprogrammed, control memory, CAR and CDR'],['mp-config','Microprogram example','Instruction format, microinstruction format, sequencer, full run'],['quiz','Exit quiz','13 quick questions with instant feedback']].map((r,i)=>`<li><a href="#${r[0]}"><span class="n">${i+1}</span><b>${r[1]}</b><span>${r[2]}</span></a></li>`).join('')}</ol>
   <div class="callout">Move between pages with the &larr; and &rarr; keys, the buttons at the bottom, or Contents. Pages you have opened get a tick.</div>`;
 }},
 /* ---------- ADDRESSING ---------- */
@@ -415,9 +609,45 @@ const SECTIONS=[
 {id:'arith',group:'Instruction types',title:'Arithmetic',render(el){
   el.innerHTML=head('Instruction types','Arithmetic instructions','These compute a new value. <code>ADDC</code> and <code>SUBB</code> also use the carry, so 8-bit operations can be chained into 16-bit ones.')+
   tbl(['Mnemonic','Operation'],[['INC / DEC','add or subtract 1'],['ADD / SUB','A + B, A − B'],['MUL / DIV','A × B, A ÷ B'],['ADDC','A + B + C'],['SUBB','A − B − borrow'],['NEG','2\'s complement of A']])+
-  `<div class="callout"><p>Subtraction is done as A + B′ + 1. Here <b>C = 1 means no borrow</b> (A ≥ B), the same convention as the status-bits example.</p></div>`+
+  `<div class="callout"><p>Subtraction is done as A + B′ + 1. Here <b>C = 1 means no borrow</b> (A ≥ B), the same convention as the status-bits example. Click any instruction and the full working appears under the machine.</p></div>`+
   tryBox('Do the sums','8-bit registers; type in any box to set up a case',machineHTML('A'));
   bindMachine();
+}},
+{id:'arith-practice',group:'Instruction types',title:'Arithmetic practice',render(el){
+  el.innerHTML=head('Instruction types','Practice: arithmetic and 16-bit numbers','An 8-bit machine handles bigger numbers one byte at a time. The low byte uses <b>ADD</b> (or <b>SUB</b>). Every higher byte uses <b>ADDC</b> (or <b>SUBB</b>), so the carry or borrow from the byte below is not lost.')+
+  `<div class="cols"><div class="box"><h4>1 · Split</h4><p>A 16-bit number = high byte × 256 + low byte. Example: 300 = 1 × 256 + 44.</p></div><div class="box"><h4>2 · Low byte first</h4><p>ADD (or SUB). Its carry out is saved in C.</p></div><div class="box"><h4>3 · High byte next</h4><p>ADDC adds C in. SUBB takes the borrow (C′) away.</p></div></div>`+
+  tryBox('16-bit addition and subtraction','one byte at a time, step by step',`
+    <div class="row"><label class="fld">X (0–65535)<input type="number" id="mbX" min="0" max="65535" value="${MB.x}"></label>${seg([['ADD','X + Y'],['SUB','X − Y']],MB.op,'mbSeg')}<label class="fld">Y (0–65535)<input type="number" id="mbY" min="0" max="65535" value="${MB.y}"></label></div>
+    <div class="row" style="margin-top:10px"><span class="note" style="margin:0">Examples:</span><button class="chip" data-mb="300,500,ADD">300 + 500</button><button class="chip" data-mb="1000,600,ADD">1000 + 600</button><button class="chip" data-mb="200,50,ADD">200 + 50 (no carry)</button><button class="chip" data-mb="800,300,SUB">800 − 300</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="mbNext">Next step</button><button class="btn ghost" id="mbAll">Show all steps</button><button class="btn ghost" id="mbReset">Start again</button><span class="note" style="margin:0" id="mbProg"></span></div>
+    <div id="mbOut"></div>`)+
+  tryBox('Practice problems','work it out on paper first, type your answer, then press Check',`<p class="note" style="margin:0 0 10px" id="pqScore"></p><div id="pqList"></div>
+    <div class="row" style="margin-top:6px"><button class="btn ghost" id="pqRand">Add a random problem</button><button class="btn ghost" id="pqClear">Clear my answers</button></div>`);
+  const mbDraw=()=>{const st=mbSteps(MB.x,MB.y,MB.op);$('#mbOut').innerHTML=st.slice(0,MB.step).join('');$('#mbProg').textContent=`Step ${MB.step} of 4`;$('#mbNext').disabled=MB.step>=4;};
+  const setSeg=()=>$$('#mbSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===MB.op));
+  bindSeg($('#mbSeg'),v=>{MB.op=v;MB.step=1;mbDraw();});
+  $('#mbX').oninput=e=>{MB.x=Math.max(0,Math.min(65535,Math.round(+e.target.value||0)));MB.step=Math.max(MB.step,1);mbDraw();};
+  $('#mbY').oninput=e=>{MB.y=Math.max(0,Math.min(65535,Math.round(+e.target.value||0)));mbDraw();};
+  el.addEventListener('click',e=>{const c=e.target.closest('[data-mb]');if(c){const [x,y,op]=c.dataset.mb.split(',');Object.assign(MB,{x:+x,y:+y,op,step:1});$('#mbX').value=x;$('#mbY').value=y;setSeg();mbDraw();}});
+  $('#mbNext').onclick=()=>{MB.step=Math.min(4,MB.step+1);mbDraw();};
+  $('#mbAll').onclick=()=>{MB.step=4;mbDraw();};
+  $('#mbReset').onclick=()=>{MB.step=1;mbDraw();};
+  mbDraw();
+  const pqDraw=()=>{
+    $('#pqList').innerHTML=PQ.map((q,i)=>{const F=pqFields(q.k);
+      return`<div class="q"><p>${i+1}. ${pqPrompt(q)}</p><div class="row">${F.map(f=>`<label class="fld">${f==='C'?'C flag':f}<input type="number" id="pq-${i}-${f}" data-pq="${i}" data-f="${f}" value="${q.ans[f]??''}"></label>`).join('')}
+      <button class="btn sm" data-pqc="${i}" style="align-self:flex-end">Check</button><button class="btn ghost sm" data-pqs="${i}" style="align-self:flex-end">${q.show?'Hide':'Show'} working</button></div>
+      ${q.res?`<div class="fb ${q.res.ok?'ok':'no'}">${q.res.msg}</div>`:''}${q.show?pqWorking(q):''}</div>`}).join('');
+    const ok=PQ.filter(q=>q.res&&q.res.ok).length;$('#pqScore').innerHTML=`<b>${ok} / ${PQ.length}</b> solved`;};
+  $('#pqList').addEventListener('input',e=>{const t=e.target;if(t.dataset.pq===undefined)return;PQ[+t.dataset.pq].ans[t.dataset.f]=t.value;});
+  $('#pqList').addEventListener('click',e=>{
+    const c=e.target.closest('[data-pqc]');if(c){const q=PQ[+c.dataset.pqc],key=pqAnswer(q),F=pqFields(q.k);
+      const bad=F.filter(f=>q.ans[f]===undefined||q.ans[f]===''||+q.ans[f]!==key[f]);
+      q.res=bad.length?{ok:false,msg:`Not yet: check ${bad.map(f=>f==='C'?'C':f).join(' and ')}. Hint: ${PQHINT[q.k]}`}:{ok:true,msg:`Correct: ${F.map(f=>`${f} = ${key[f]}`).join(', ')}.`};pqDraw();return;}
+    const s2=e.target.closest('[data-pqs]');if(s2){const q=PQ[+s2.dataset.pqs];q.show=!q.show;pqDraw();}});
+  $('#pqRand').onclick=()=>{PQ.push(pqRandom());pqDraw();};
+  $('#pqClear').onclick=()=>{PQ.forEach(q=>{q.ans={};q.res=null;q.show=false;});pqDraw();};
+  pqDraw();
 }},
 {id:'logic',group:'Instruction types',title:'Logic and masks',render(el){
   el.innerHTML=head('Instruction types','Logical instructions and masks','Logic instructions work on each bit separately. With a <b>mask</b> you choose which bits to change.')+
@@ -430,7 +660,7 @@ const SECTIONS=[
       <div class="bitline" id="lgMl"><span class="bitname" id="lgOpL"></span><span id="lgM"></span></div>
       <div class="bitline"><span class="bitname">= result</span><span id="lgR"></span></div>
     </div>
-    <p class="note" id="lgRule"></p>
+    <p class="note" id="lgRule"></p><div id="lgSteps"></div>
     <div class="row" style="margin-top:10px"><span class="note" style="margin:0">Mask presets:</span><button class="chip" data-mask="15">low nibble</button><button class="chip" data-mask="240">high nibble</button><button class="chip" data-mask="1">bit 0</button><button class="chip" data-mask="128">bit 7</button><button class="btn ghost sm" id="lgApply">Use result as operand</button></div>`)+
   tryBox('Single-bit control instructions','carry and interrupt-enable flip-flops',`
     <div class="row"><div class="flag" id="lgC"><b>0</b><small>C · carry</small></div><div class="flag" id="lgI"><b>1</b><small>IEN · interrupt enable</small></div>
@@ -439,7 +669,7 @@ const SECTIONS=[
     $('#lgV').innerHTML=bitsHTML(LG.v,8,'lgv');$('#lgM').innerHTML=bitsHTML(LG.m,8,'lgm');$('#lgMl').style.opacity=nm?.35:1;$('#lgOpL').textContent=nm?'(no mask)':LG.op+' mask';
     $('#lgR').innerHTML=bitsHTML(r,8,'lgr',{editable:false,hl:ch});
     const n=[...binN(ch,8)].filter(x=>x==='1').length;
-    $('#lgRule').innerHTML=`${LGRULE[LG.op]} <b>${n} bit${n===1?'':'s'} changed</b> (ringed in green).`;
+    $('#lgRule').innerHTML=`${LGRULE[LG.op]} <b>${n} bit${n===1?'':'s'} changed</b> (ringed in green).`;$('#lgSteps').innerHTML=logicCalc(LG.v,LG.m,LG.op,r);
     const f=(e,v)=>{e.classList.toggle('set',!!v);e.querySelector('b').textContent=v;};f($('#lgC'),LG.C);f($('#lgI'),LG.IEN);};
   bindSeg($('#lgSeg'),v=>{LG.op=v;draw();});
   el.addEventListener('click',e=>{const b=e.target.closest('.bit');
@@ -452,12 +682,35 @@ const SECTIONS=[
 {id:'shift',group:'Instruction types',title:'Shift instructions',render(el){
   el.innerHTML=head('Instruction types','Shift instructions','A shift moves every bit one place left or right. The kinds differ only in <b>what enters</b> at one end and <b>where the leaving bit goes</b>.')+
   tbl(['Mnemonic','What enters / where the bit goes'],[['SHR / SHL','a 0 enters; the leaving bit is lost'],['SHRA','the sign bit is copied (signed ÷ 2)'],['SHLA','like SHL; V = 1 if the sign changes'],['ROR / ROL','the leaving bit comes back at the other end'],['RORC / ROLC','C enters; the leaving bit goes into C']])+
+  `<h3>SHR vs SHRA: what fills bit 7?</h3>
+  <p class="prose">Both instructions do the same thing to bits 6 … 0: every bit moves one place right and bit 0 falls off. The <b>only</b> difference is what goes into the empty bit 7.</p>`+
+  tbl(['Instruction','New bit 7 gets','Use it for'],[['SHR','always 0','unsigned numbers (0 to 255)'],['SHRA','a copy of the old bit 7 (the sign bit)','signed numbers (−128 to +127)']])+
+  `<div class="callout"><p>In 2's complement, bit 7 is the <b>sign</b>: 0 = positive, 1 = negative. Shifting right should halve the number. SHR puts a 0 in bit 7, so the result is always positive: right for unsigned numbers. SHRA keeps bit 7, so a negative number stays negative: right for signed numbers. <b>They only give different results when bit 7 = 1.</b></p></div>
+  <div class="cols">
+   <div class="box"><h4>Case 1 · positive: both the same</h4><p>0110 0100 = 100. Old bit 7 is 0, so "insert 0" and "copy bit 7" are the same.</p>
+<pre class="calc">bit:   7 6 5 4  3 2 1 0
+before 0 1 1 0  0 1 0 0   = 100
+SHR    0 0 1 1  0 0 1 0   = 50
+SHRA   0 0 1 1  0 0 1 0   = 50</pre><p>Both give 100 ÷ 2 = 50.</p></div>
+   <div class="box"><h4>Case 2 · negative: they differ</h4><p>1110 1100 = 236 unsigned, or −20 signed.</p>
+<pre class="calc">bit:   7 6 5 4  3 2 1 0
+before 1 1 1 0  1 1 0 0   236 / −20
+SHR    0 1 1 1  0 1 1 0   = 118
+SHRA   1 1 1 1  0 1 1 0   = −10</pre><p>SHR: 236 ÷ 2 = 118, right as unsigned, but −20 became +118. SHRA: −20 ÷ 2 = −10, right as signed.</p></div>
+  </div>`+
+  tbl(['1110 1100 shifted','Read as unsigned','Read as signed'],[['SHR → 0111 0110','118 ✓ (236 ÷ 2)','+118 ✗ (should be −10)'],['SHRA → 1111 0110','246 ✗','−10 ✓ (−20 ÷ 2)']])+
+  `<p class="prose"><b>Odd numbers:</b> SHRA rounds <i>down</i>. The slide example 1011 0011 (−77) becomes 1101 1001 (−39), because −38.5 rounds towards minus infinity. SHR on the same bits gives 0101 1001 (89 = 179 ÷ 2, remainder 1 lost).<br><b>Left shifts:</b> no sign-copying version is needed, because the empty place after a left shift is bit 0. SHL and SHLA give the same bits; SHLA also sets V = 1 if bit 7 changes.</p>`+
+  tryBox('Compare SHR and SHRA','both shifts applied to the same value; click bits or pick an example',`
+    <div class="bitline"><span class="bitname">value</span><span id="scV"></span></div>
+    <div class="row" style="margin-top:10px"><span class="note" style="margin:0">Examples:</span><button class="chip" data-sc="100">0110 0100 (100)</button><button class="chip" data-sc="236">1110 1100 (−20)</button><button class="chip" data-sc="179">1011 0011 (−77)</button><button class="chip" data-sc="128">1000 0000 (−128)</button><button class="chip" data-sc="255">1111 1111 (−1)</button></div>
+    <div class="split" style="margin-top:14px" id="scOut"></div>
+    <p class="note" id="scMsg"></p>`)+
   tryBox('Shift a byte','starts with the slide example 1011 0011, C = 0; each click shifts the current value',`
     <div class="stack">
       <div class="bitline"><span class="bitname">before</span><span id="shB"></span></div>
       <div class="bitline"><span class="bitname">now</span><span id="shV"></span><span class="bitname" style="min-width:0">C</span><span id="shC"></span></div>
     </div>
-    <p class="note" id="shWhat">Pick a shift below. You can also click bits to change the value.</p>
+    <p class="note" id="shWhat">Pick a shift below. You can also click bits to change the value.</p><div id="shSteps"></div>
     <div class="cells" style="margin:12px 0"><div class="cell"><small>Unsigned</small><strong id="shU"></strong></div><div class="cell"><small>Signed</small><strong id="shS"></strong></div><div class="cell"><small>Overflow V</small><strong id="shVf"></strong></div></div>
     <div class="ops">${Object.entries(SHOPS).map(([k,o])=>`<button class="op" data-sh="${k}"><b>${k}</b><small>${o.d}</small></button>`).join('')}</div>
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" id="shReset">Reset to 1011 0011</button></div>
@@ -468,9 +721,9 @@ const SECTIONS=[
     $('#shC').innerHTML=`<span class="bits"><button class="bit${SH.C?' on':''}" data-row="shc" data-i="0" aria-label="carry">${SH.C}</button></span>`;
     $('#shU').textContent=SH.v;$('#shS').textContent=s8(SH.v);$('#shVf').textContent=SH.V;
     $('#shLog').innerHTML=SH.hist.length?SH.hist.map(h=>`<div>${h}</div>`).join(''):'<div>No shifts yet</div>';
-    if(SH.msg)$('#shWhat').innerHTML=SH.msg;};
+    if(SH.msg)$('#shWhat').innerHTML=SH.msg;$('#shSteps').innerHTML=SH.calc||'';};
   el.addEventListener('click',e=>{const b=e.target.closest('.bit');
-    if(b&&!b.disabled){if(b.dataset.row==='shv'){SH.v^=1<<+b.dataset.i;SH.last=null;}else if(b.dataset.row==='shc')SH.C^=1;draw();return;}
+    if(b&&!b.disabled){if(b.dataset.row==='shv'){SH.v^=1<<+b.dataset.i;SH.last=null;SH.calc='';}else if(b.dataset.row==='shc')SH.C^=1;draw();return;}
     const o=e.target.closest('[data-sh]');
     if(o){const k=o.dataset.sh;const r=SHOPS[k].f(SH.v,SH.C);const oc=SH.C;SH.prev=SH.v;SH.v=r.r;SH.C=r.c;SH.V=r.V||0;SH.last=r;
       const inV=(r.r>>r.inb)&1;
@@ -478,9 +731,19 @@ const SECTIONS=[
       w+=r.copy?`The sign bit (${inV}) was copied into bit 7, so the sign is kept. `:`A ${inV} entered at bit ${r.inb} (ringed). `;
       if(k==='SHLA')w+=r.V?'The sign changed, so V = 1.':'The sign did not change, so V = 0.';
       if(k.endsWith('C'))w+=` C was ${oc}, now ${SH.C}.`;
-      SH.msg=w;SH.hist.unshift(`${k.padEnd(5,' ')} ${grp(binN(SH.prev,8))} → ${grp(binN(SH.v,8))}  C=${SH.C}${k==='SHLA'?' V='+SH.V:''}`);SH.hist=SH.hist.slice(0,10);draw();flash($('#shV'));}
-    if(e.target.id==='shReset'){Object.assign(SH,{v:0b10110011,C:0,prev:null,last:null,V:0,hist:[],msg:'Pick a shift below.'});draw();}});
+      SH.msg=w;SH.calc=shiftCalc(k,SH.prev,oc,r,SH.V);SH.hist.unshift(`${k.padEnd(5,' ')} ${grp(binN(SH.prev,8))} → ${grp(binN(SH.v,8))}  C=${SH.C}${k==='SHLA'?' V='+SH.V:''}`);SH.hist=SH.hist.slice(0,10);draw();flash($('#shV'));}
+    if(e.target.id==='shReset'){Object.assign(SH,{v:0b10110011,C:0,prev:null,last:null,V:0,hist:[],msg:'Pick a shift below.',calc:''});draw();}});
   draw();
+  const scDraw=()=>{const v=SC.v,b7=v>>7,r1=v>>1,r2=(v>>1)|(v&128),u=Math.floor(v/2),sg=Math.floor(s8(v)/2);
+    $('#scV').innerHTML=bitsHTML(v,8,'scv');
+    const col=(name,r,fill)=>`<div class="box"><h4>${name}: bit 7 ← ${fill}</h4><div class="bitline">${bitsHTML(r,8,'sc'+name,{editable:false,inbit:7})}</div>
+      <p style="margin:10px 0 4px">Unsigned: <b>${r}</b> ${r===u?'✓':'✗'} <span class="muted">(${v} ÷ 2 = ${u})</span></p>
+      <p style="margin:0">Signed: <b>${s8(r)}</b> ${s8(r)===sg?'✓':'✗'} <span class="muted">(${s8(v)} ÷ 2 = ${s8(v)/2}${s8(v)%2?` → ${sg}`:''})</span></p></div>`;
+    $('#scOut').innerHTML=col('SHR',r1,'0')+col('SHRA',r2,`old bit 7 = ${b7}`);
+    $('#scMsg').innerHTML=b7?`Bit 7 is <b>1</b>, so the results differ. SHR is right if you read the value as unsigned (${v}); SHRA is right if you read it as signed (${s8(v)}).`:`Bit 7 is <b>0</b> (a positive number), so SHR and SHRA give exactly the same bits.`;};
+  $('#scV').onclick=e=>{const b=e.target.closest('.bit');if(!b)return;SC.v^=1<<+b.dataset.i;scDraw();};
+  el.addEventListener('click',e=>{const c=e.target.closest('[data-sc]');if(c){SC.v=+c.dataset.sc;scDraw();}});
+  scDraw();
 }},
 /* ---------- PROGRAM CONTROL ---------- */
 {id:'pc-ctrl',group:'Program control',title:'Branch, call and return',render(el){
@@ -510,7 +773,7 @@ const SECTIONS=[
     <div class="row" style="margin-top:10px"><span class="note" style="margin:0">Examples:</span><button class="chip" data-ex="240,20,SUB">slide example</button><button class="chip" data-ex="127,1,ADD">signed overflow</button><button class="chip" data-ex="200,100,ADD">carry out</button><button class="chip" data-ex="37,37,CMP">equal compare</button><button class="chip" data-ex="20,240,SUB">borrow</button></div>
     <div class="lbl">The addition</div><div class="sum" id="fSum"></div>
     <div class="lbl">Status bits</div><div class="flags" id="fFlags"></div><div id="fPredBox"></div>
-    <p class="note" id="fCheck"></p>`);
+    <p class="note" id="fCheck"></p><div id="fSteps"></div>`);
   bindSeg($('#fSeg'),v=>{FL.op=v;FL.checked=false;fRender();});
   el.addEventListener('click',e=>{const b=e.target.closest('.bit');
     if(b){const r=b.dataset.row;if(r==='fa')FL.a^=1<<+b.dataset.i;else if(r==='fb')FL.b^=1<<+b.dataset.i;else if(r&&r[0]==='g')FL.guess[r[1]]^=1;if(r==='fa'||r==='fb')FL.checked=false;fRender();return;}
@@ -529,14 +792,14 @@ const SECTIONS=[
     <div class="lbl">Flags (click to toggle)</div><div class="flags" id="bfFlags"></div>
     <div class="lbl">Or compute them with CMP A, B</div>
     <div class="row"><label class="fld">A<input type="number" id="bfA" value="${BF.a}" min="0" max="255"></label><label class="fld">B<input type="number" id="bfB" value="${BF.b}" min="0" max="255"></label><button class="btn ghost" id="bfCmp" style="align-self:flex-end">Run CMP A, B</button></div>
-    <p class="note" id="bfMsg"></p>
+    <p class="note" id="bfMsg"></p><div id="bfSteps"></div>
     <div class="lbl">Branches · green = taken</div><div class="brs" id="bfBr"></div>`);
   const draw=()=>{const names={C:'Carry',S:'Sign',Z:'Zero',V:'Overflow'};
     $('#bfFlags').innerHTML=['C','S','Z','V'].map(k=>`<div class="flag${BF[k]?' set':''}"><small>${names[k]}</small><span class="bits"><button class="bit${BF[k]?' on':''}" data-f="${k}" aria-label="${names[k]} flag">${BF[k]}</button></span> <b style="display:inline;font-size:16px">${k}</b></div>`).join('');
     $('#bfBr').innerHTML=BRS.map(([m,c,k,v])=>{const t=BF[k]===v;return`<div class="brx${t?' take':''}"><b>${m}</b>${c} · ${t?'taken':'not taken'}</div>`}).join('');
-    $('#bfMsg').innerHTML=BF.msg||'';};
-  el.addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(b){BF[b.dataset.f]^=1;BF.msg='';draw();}});
-  $('#bfCmp').onclick=()=>{BF.a=Math.max(0,Math.min(255,+$('#bfA').value||0));BF.b=Math.max(0,Math.min(255,+$('#bfB').value||0));const R=alu(BF.a,BF.b,'CMP');Object.assign(BF,{C:R.C,S:R.S,Z:R.Z,V:R.V});
+    $('#bfMsg').innerHTML=BF.msg||'';$('#bfSteps').innerHTML=BF.steps||'';};
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(b){BF[b.dataset.f]^=1;BF.msg='';BF.steps='';draw();}});
+  $('#bfCmp').onclick=()=>{BF.a=Math.max(0,Math.min(255,+$('#bfA').value||0));BF.b=Math.max(0,Math.min(255,+$('#bfB').value||0));const R=alu(BF.a,BF.b,'CMP');Object.assign(BF,{C:R.C,S:R.S,Z:R.Z,V:R.V});BF.steps=aluCalc(BF.a,BF.b,'CMP');
     BF.msg=`A − B = ${grp(binN(R.r,8))} (not stored). Unsigned: ${BF.a} ${BF.a>BF.b?'>':BF.a<BF.b?'<':'='} ${BF.b}. Signed: ${s8(BF.a)} ${s8(BF.a)>s8(BF.b)?'>':s8(BF.a)<s8(BF.b)?'<':'='} ${s8(BF.b)}.`;draw();};
   draw();
 }},
@@ -591,12 +854,12 @@ const SECTIONS=[
     <div class="row"><label class="check"><input type="checkbox" id="cwI" ${CW.I?'checked':''}> Indirect (I = 1)</label>${seg(OPC.map((o,i)=>[i,o]),CW.op,'cwSeg')}<label class="fld" style="flex-direction:row;align-items:center;gap:6px">Address<input type="number" id="cwA" min="0" max="2047" value="${CW.a}"></label></div>
     <div class="wgroups" style="margin-top:14px;overflow-x:auto" id="cwBits"></div>
     <div class="cells" style="margin-top:14px" id="cwOut"></div>
-    <p class="note" id="cwMean"></p>`);
+    <p class="note" id="cwMean"></p><div id="cwSteps"></div>`);
   const draw=()=>{const w=(CW.I<<15)|(CW.op<<11)|CW.a;
     $('#cwBits').innerHTML=`<div class="wg">${bitsHTML(CW.I,1,'cw15')}<small>I</small></div><div class="wg">${bitsHTML(CW.op,4,'cwop')}<small>opcode</small></div><div class="wg">${bitsHTML(CW.a,11,'cwad')}<small>address</small></div>`;
     $('#cwOut').innerHTML=`<div class="cell"><small>Word (hex)</small><strong>${hex(w,4)}</strong></div><div class="cell hot"><small>Mapped CAR</small><strong>${CW.op<<2}</strong><span class="sub">0 ${binN(CW.op,4)} 00</span></div><div class="cell"><small>Routine</small><strong style="font-size:18px">${OPC[CW.op]||'not defined'}</strong></div>`;
     const ea=CW.I?`EA = M[${CW.a}]`:`EA = ${CW.a}`;
-    $('#cwMean').innerHTML=CW.op<4?`<b>${OPC[CW.op]}${CW.I?' I':''} ${CW.a}</b>: ${ea}, then ${['AC ← AC + M[EA]','if AC < 0 then PC ← EA','M[EA] ← AC','AC ↔ M[EA]'][CW.op]}.`:'Opcodes 0100–1111 are not used in this example (the map has room for 16 routines).';
+    $('#cwMean').innerHTML=CW.op<4?`<b>${OPC[CW.op]}${CW.I?' I':''} ${CW.a}</b>: ${ea}, then ${['AC ← AC + M[EA]','if AC < 0 then PC ← EA','M[EA] ← AC','AC ↔ M[EA]'][CW.op]}.`:'Opcodes 0100–1111 are not used in this example (the map has room for 16 routines).';$('#cwSteps').innerHTML=wordCalc(CW);
     $('#cwI').checked=!!CW.I;$('#cwA').value=CW.a;$$('#cwSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===CW.op));};
   bindSeg($('#cwSeg'),v=>{CW.op=+v;draw();});
   $('#cwI').onchange=e=>{CW.I=e.target.checked?1:0;draw();};$('#cwA').oninput=e=>{CW.a=Math.max(0,Math.min(2047,+e.target.value||0));draw();};
@@ -622,7 +885,7 @@ const SECTIONS=[
     $('#mfF').innerHTML=fieldsHTML(m);
     const ops=opsOf(m);const cond={U:'always',I:'if I = DR(15) = 1',S:'if AC is negative',Z:'if AC = 0'}[m.cd];
     const nx={JMP:m.cd==='U'?`CAR ← ${m.ad} (always)`:`${cond}: CAR ← ${m.ad}, else CAR ← CAR + 1`,CALL:`${cond}: SBR ← CAR + 1 and CAR ← ${m.ad}, else CAR ← CAR + 1`,RET:'CAR ← SBR (return from subroutine; CD and AD are ignored)',MAP:'CAR ← 0 · DR(11–14) · 00 (jump to the opcode\'s routine)'}[m.br];
-    $('#mfDo').innerHTML=(ops.length?ops.map(o=>`<li>${o}: ${RTL[o]}</li>`).join(''):'<li>NOP: no micro-operation</li>')+`<li>Next address: ${nx}</li>`;};
+    $('#mfDo').innerHTML=(ops.length?ops.map(o=>`<li>${o}: ${RTL[o]}</li>`).join(''):'<li>NOP: no micro-operation</li>')+`<li>Next address: ${nx}</li><li>All 20 bits in order F1 F2 F3 CD BR AD: <code>${binN(F1N.indexOf(m.f1),3)} ${binN(F2N.indexOf(m.f2),3)} ${binN(F3N.indexOf(m.f3),3)} ${binN(CDN.indexOf(m.cd),2)} ${binN(BRN.indexOf(m.br),2)} ${binN(m.ad,7)}</code> (3 + 3 + 3 + 2 + 2 + 7 = 20 bits)</li>`;};
   const set=()=>{MF={f1:$('#mf1').value,f2:$('#mf2').value,f3:$('#mf3').value,cd:$('#mcd').value,br:$('#mbr').value,ad:Math.max(0,Math.min(127,+$('#mad').value||0)),sym:''};$('#mfLoad').value='';draw();};
   ['#mf1','#mf2','#mf3','#mcd','#mbr','#mad'].forEach(s=>$(s).addEventListener('change',set));
   $('#mfLoad').onchange=e=>{if(e.target.value==='')return;const m=CM[e.target.value];MF={...m};const v=e.target.value;draw();$('#mfLoad').value=v;};
@@ -641,7 +904,7 @@ const SECTIONS=[
     $('#sqOut').innerHTML=`<div class="seqblk"><b>Input logic · I1 I0 = ${I1}${I0}, T = ${T}</b><span style="font-family:var(--mono);font-size:14px">S1 = <b>${S1}</b> &nbsp; S0 = <b>${S0}</b> &nbsp; L = <b>${L}</b>${L?` → SBR ← CAR + 1 = ${SQ.CAR+1}`:''}</span></div>
     <div class="arrow">↓ S1 S0 = ${S1}${S0}</div>
     <div class="seqblk"><b>MUX 1 (next address)</b><div class="mux">${['CAR + 1','AD','SBR','MAP'].map((n,i)=>`<span class="${i===sel?'pick':''}">${i}: ${n}<br>= ${c[i]}</span>`).join('')}</div></div>
-    <div class="arrow">↓</div><div class="cells"><div class="cell hot"><small>Next CAR</small><strong>${c[sel]}</strong></div><div class="cell"><small>SBR after</small><strong>${L?SQ.CAR+1:SQ.SBR}</strong></div></div>`;
+    <div class="arrow">↓</div><div class="cells"><div class="cell hot"><small>Next CAR</small><strong>${c[sel]}</strong></div><div class="cell"><small>SBR after</small><strong>${L?SQ.CAR+1:SQ.SBR}</strong></div></div>${seqCalc(I1,I0,T,S1,S0,L,sel,c,SQ.CAR,SQ.op)}`;
     $('#sqTT').innerHTML=`<div class="tbl-wrap"><table class="t"><tr><th>BR</th><th>I1 I0</th><th>T</th><th>S1 S0</th><th>L</th><th>Next address</th></tr>${[['JMP','0 0','0','0 0','0','CAR + 1',0,0],['JMP','0 0','1','0 1','0','AD',0,1],['CALL','0 1','0','0 0','0','CAR + 1',1,0],['CALL','0 1','1','0 1','1','AD, SBR ← CAR + 1',1,1],['RET','1 0','x','1 0','0','SBR',2,-1],['MAP','1 1','x','1 1','0','opcode mapping',3,-1]].map(r=>`<tr class="${br===r[6]&&(r[7]===-1||r[7]===T)?'sel':''}">${r.slice(0,6).map((x,i)=>`<td class="${i?'':'m'}">${x}</td>`).join('')}</tr>`).join('')}</table></div>`;};
   bindSeg($('#sqBR'),v=>{SQ.br=v;draw();});bindSeg($('#sqT'),v=>{SQ.T=v;draw();});
   [['CAR','#sqCAR'],['AD','#sqAD'],['SBR','#sqSBR']].forEach(([k,s])=>$(s).oninput=e=>{SQ[k]=Math.max(0,Math.min(127,+e.target.value||0));draw();});
@@ -680,7 +943,7 @@ const SECTIONS=[
 }},
 /* ---------- WRAP-UP ---------- */
 {id:'quiz',group:'Wrap-up',title:'Exit quiz',render(el){
-  el.innerHTML=head('Wrap-up','Exit quiz','Twelve quick questions across the unit. Pick an answer to see at once whether it is right, and why.')+
+  el.innerHTML=head('Wrap-up','Exit quiz','Thirteen quick questions across the unit. Pick an answer to see at once whether it is right, and why.')+
   `<div class="scorebar"><b id="qzScore"></b><span id="qzLeft"></span><button class="btn ghost sm" id="qzReset">Reset quiz</button></div><div id="qz"></div>`;
   const draw=()=>{let ok=0,done=0;
     $('#qz').innerHTML=QZ.map((q,i)=>{const a=QA[i];if(a!==undefined){done++;if(a===q.k)ok++;}
@@ -694,7 +957,7 @@ const SECTIONS=[
 
 /* ================= MACHINE (transfer + arithmetic) ================= */
 const X2init={AC:12,R1:5,R2:0,C:0,M10:25,M11:0,IN:42,OUT:null,stack:[]};
-let X2=structuredClone(X2init),x2log=[];
+let X2=structuredClone(X2init),x2log=[],x2g='T';const X2CALC={T:'',A:''};
 const REGS2=[['AC','AC'],['R1','R1'],['R2','R2'],['C','Carry C'],['M10','M[10]'],['M11','M[11]'],['IN','Input port'],['OUT','Output port']];
 const addC=r=>{X2.C=r>255?1:0;return r&255;};
 const OPS2=[
@@ -716,22 +979,23 @@ const OPS2=[
  {g:'A',l:'SUBB AC, R1',r:'AC ← AC − R1 − C′',f:s=>{s.AC=addC(s.AC+((~s.R1)&255)+s.C);return['AC','C']}},
  {g:'A',l:'NEG AC',r:'AC ← 2\'s complement',f:s=>{s.AC=(256-s.AC)&255;return['AC']}},
 ];
-function machineHTML(g){return`<div class="lbl">Instructions</div><div class="ops" id="x2Ops">${OPS2.map((o,i)=>o.g===g?`<button class="op" data-op="${i}"><b>${o.l}</b><small>${o.r}</small></button>`:'').join('')}</div>
+function machineHTML(g){x2g=g;return`<div class="lbl">Instructions</div><div class="ops" id="x2Ops">${OPS2.map((o,i)=>o.g===g?`<button class="op" data-op="${i}"><b>${o.l}</b><small>${o.r}</small></button>`:'').join('')}</div>
   <div class="row" style="justify-content:space-between;margin-top:14px"><div class="lbl" style="margin:0">Machine state</div><button class="btn ghost sm" id="x2Reset">Reset</button></div><div class="cells" id="x2Regs" style="margin-top:6px"></div>
-  <div class="split" style="margin-top:12px"><div><div class="lbl">Stack (top in blue)</div><div class="stk" id="x2Stack"></div></div><div><div class="lbl">Log</div><div class="log" id="x2Log"></div></div></div>`;}
+  <div class="split" style="margin-top:12px"><div><div class="lbl">Stack (top in blue)</div><div class="stk" id="x2Stack"></div></div><div><div class="lbl">Log</div><div class="log" id="x2Log"></div></div></div><div id="x2Calc"></div>`;}
 function x2Render(ch=[]){
   $('#x2Regs').innerHTML=REGS2.map(([k,n])=>{const v=X2[k];return`<div class="cell" data-k="${k}"><small>${n}</small>${k==='OUT'?`<strong>${v===null?'—':v}</strong>`:`<input type="number" id="x2-${k}" data-k="${k}" min="0" max="${k==='C'?1:255}" value="${v}">`}<span class="sub">${v===null?'&nbsp;':k==='C'?(v?'set':'clear'):grp(binN(v,8))+(v>127?' · '+s8(v):'')}</span></div>`}).join('');
   $('#x2Stack').innerHTML=X2.stack.length?X2.stack.map(v=>`<span>${v}</span>`).join(''):'<span class="muted" style="border:0;background:none">empty</span>';
   ch.forEach(k=>flash(k==='stack'?$('#x2Stack'):$(`#x2Regs .cell[data-k="${k}"]`)));
   $('#x2Log').innerHTML=x2log.length?x2log.map(l=>`<div class="${l.e?'err':''}">${l.t}</div>`).join(''):'<div>Click an instruction</div>';
+  $('#x2Calc').innerHTML=X2CALC[x2g]||calcBox(x2g==='A'?'Step-by-step calculation':'What changed','<p class="note" style="margin:0">Click an instruction above to see the full working here.</p>');
 }
 function bindMachine(){
-  $('#x2Ops').onclick=e=>{const c=e.target.closest('[data-op]');if(!c)return;const o=OPS2[+c.dataset.op];const r=o.f(X2);
+  $('#x2Ops').onclick=e=>{const c=e.target.closest('[data-op]');if(!c)return;const o=OPS2[+c.dataset.op];const B0=structuredClone(X2);const r=o.f(X2);
     if(r.err){x2log.unshift({t:`${o.l}: ${r.err}`,e:1});x2Render();return;}
     const d=r.filter(k=>k!=='stack').map(k=>`${k==='M11'?'M[11]':k} = ${X2[k]}`).join(', ');
-    x2log.unshift({t:`${o.l.padEnd(11,' ')} ${o.r}  →  ${d||'stack depth '+X2.stack.length}`});x2log=x2log.slice(0,8);x2Render(r);};
+    x2log.unshift({t:`${o.l.padEnd(11,' ')} ${o.r}  →  ${d||'stack depth '+X2.stack.length}`});x2log=x2log.slice(0,8);X2CALC[x2g]=machineCalc(o,B0,X2,r);x2Render(r);};
   $('#x2Regs').onchange=e=>{const k=e.target.dataset.k;if(!k)return;X2[k]=Math.max(0,Math.min(k==='C'?1:255,Math.round(+e.target.value||0)));x2Render();};
-  $('#x2Reset').onclick=()=>{X2=structuredClone(X2init);x2log=[];x2Render();};
+  $('#x2Reset').onclick=()=>{X2=structuredClone(X2init);x2log=[];X2CALC[x2g]='';x2Render();};
   x2Render();
 }
 
@@ -740,6 +1004,7 @@ const LG={v:0b10101101,m:0b00001111,op:'AND',C:0,IEN:1};
 const LGOPS={AND:(v,m)=>v&m,OR:(v,m)=>v|m,XOR:(v,m)=>v^m,CLR:()=>0,COM:v=>(~v)&255};
 const LGRULE={AND:'AND keeps bits where the mask is 1 and clears bits where it is 0.',OR:'OR sets bits where the mask is 1.',XOR:'XOR flips bits where the mask is 1.',CLR:'CLR clears every bit.',COM:'COM inverts every bit (1\'s complement).'};
 const SH={v:0b10110011,C:0,prev:null,last:null,V:0,hist:[],msg:''};
+const SC={v:0b11101100};
 const SHOPS={
  SHR:{d:'0 enters at left',f:(v,c)=>({r:v>>1,c,inb:7,out:v&1,to:'nowhere (lost)'})},
  SHL:{d:'0 enters at right',f:(v,c)=>({r:(v<<1)&255,c,inb:0,out:v>>7,to:'nowhere (lost)'})},
@@ -776,7 +1041,7 @@ function fRender(){
   const nm={C:'Carry',S:'Sign',Z:'Zero',V:'Overflow'};
   if(FL.pred&&!FL.checked){
     $('#fFlags').innerHTML=['C','S','Z','V'].map(k=>`<div class="flag"><small>${nm[k]} · your guess</small><span class="bits"><button class="bit${FL.guess[k]?' on':''}" data-row="g${k}" data-i="0">${FL.guess[k]}</button></span> <b style="display:inline;font-size:16px">${k}</b></div>`).join('');
-    $('#fPredBox').innerHTML=`<div class="row" style="margin-top:10px"><button class="btn" id="fCheckBtn">Check my flags</button></div>`;$('#fCheck').textContent='';return;
+    $('#fPredBox').innerHTML=`<div class="row" style="margin-top:10px"><button class="btn" id="fCheckBtn">Check my flags</button></div>`;$('#fCheck').textContent='';$('#fSteps').innerHTML='';return;
   }
   $('#fFlags').innerHTML=['C','S','Z','V'].map(k=>`<div class="flag${R[k]?' set':''}"><b>${k} = ${R[k]}</b><small>${nm[k]} · ${why[k]}</small></div>`).join('');
   if(FL.pred&&FL.checked){const w=['C','S','Z','V'].filter(k=>FL.guess[k]!==R[k]);$('#fPredBox').innerHTML=`<div class="fb ${w.length?'no':'ok'}">${w.length?'Check '+w.join(', ')+' against the reasons above.':'All four flags correct.'} <a href="#" id="fAgain">Try a random one</a></div>`;}
@@ -786,6 +1051,7 @@ function fRender(){
   else if(FL.op==='TST')t='Only Z and S mean something after TST. BZ then asks: were all the tested bits 0?';
   else{const sv=s8(FL.a)-s8(FL.b);t=`Signed: ${s8(FL.a)} − ${s8(FL.b)} = ${sv}${sv<-128||sv>127?', outside −128…127, so V = 1.':', fits, so V = 0.'} Unsigned: ${R.C?'C = 1 means no borrow, so A ≥ B.':'C = 0 means a borrow, so A < B.'}`;}
   $('#fCheck').textContent=t;
+  $('#fSteps').innerHTML=aluCalc(FL.a,FL.b,FL.op);
 }
 
 /* ================= PROGRAM CONTROL TRACER ================= */
@@ -864,7 +1130,7 @@ function preview(){const m=CM[MP.CAR];const T={U:1,I:(MP.DR>>15)&1,S:(MP.AC>>15)
 const phaseOf=c=>c>=64&&c<=66?'Fetch':c>=67?'Indirect':OPC[c>>2]+' routine';
 function mpStep(){
   if(MP.halted)return false;
-  if(MP.CAR===64&&!(MP.PC<8&&PROG[MP.PC]&&PROG[MP.PC].op>=0)){MP.halted=true;MP.msg=`<b>Program finished.</b> PC = ${MP.PC} holds no instruction. Press Reset to run again, or edit the program.`;mpStop();mpRender();return false;}
+  if(MP.CAR===64&&!(MP.PC<8&&PROG[MP.PC]&&PROG[MP.PC].op>=0)){MP.halted=true;MP.nums=null;MP.msg=`<b>Program finished.</b> PC = ${MP.PC} holds no instruction. Press Reset to run again, or edit the program.`;mpStop();mpRender();return false;}
   const P=preview(),m=P.m,o={PC:MP.PC,AR:MP.AR,DR:MP.DR,AC:MP.AC},n={...o},ch=[],w=[];
   for(const op of [m.f1,m.f2,m.f3])switch(op){
     case'ADD':n.AC=(o.AC+o.DR)&0xFFFF;break;case'CLRAC':n.AC=0;break;case'INCAC':n.AC=(o.AC+1)&0xFFFF;break;case'DRTAC':n.AC=o.DR;break;
@@ -883,14 +1149,14 @@ function mpStep(){
   else if(m.cd==='S')ex=P.T?'AC is negative (S = 1): branch to OVER.':'AC is not negative (S = 0): no branch, back to FETCH.';
   else if(P.next===64)ex=`${phaseOf(cur)} done: back to FETCH at 64.`;
   else ex=`${phaseOf(cur)}: ${opsOf(m).map(x=>RTL[x]).join(', ')||'no operation'}.`;
-  MP.msg=ex;mpChanged=ch;mpRender();return true;
+  MP.msg=ex;MP.nums=numOps(m,o,n);mpChanged=ch;mpRender();return true;
 }
 function mpStop(){clearInterval(mpTimer);mpTimer=null;const b=$('#mpRun');if(b)b.textContent='Run';}
 function mpRender(full){
   const m=CM[MP.CAR],P=MP.halted?null:preview();
   $('#mpPhase').innerHTML=`<span class="phase">${MP.halted?'Halted':phaseOf(MP.CAR)}</span>`;
   $('#mpCount').textContent=`${MP.micro} microinstructions · ${MP.instr} instructions`;
-  $('#mpMsg').innerHTML=MP.msg;
+  $('#mpMsg').innerHTML=MP.msg+(MP.nums&&MP.nums.length?`<br><b>In numbers:</b> <span style="font-family:var(--mono)">${MP.nums.join(' · ')}</span>`:'');
   const r=(k,v,b,d)=>`<div class="cell" data-k="${k}"><small>${k} · ${b} bits</small><strong>${d}</strong><span class="sub">${grp(binN(v,b))}</span></div>`;
   $('#mpRegs').innerHTML=r('PC',MP.PC,11,MP.PC)+r('AR',MP.AR,11,MP.AR)+r('DR',MP.DR,16,s16(MP.DR))+r('AC',MP.AC,16,s16(MP.AC))+r('CAR',MP.CAR,7,MP.CAR)+r('SBR',MP.SBR,7,MP.SBR);
   mpChanged.forEach(k=>flash($(`#mpRegs .cell[data-k="${k}"]`)));
@@ -899,7 +1165,7 @@ function mpRender(full){
   if(P){const cv={U:1,I:(MP.DR>>15)&1,S:(MP.AC>>15)&1,Z:MP.AC===0?1:0};
     $('#mpSeq').innerHTML=`<div class="seqblk"><b>MUX 2 · select CD = ${m.cd}</b><div class="mux">${CDN.map(k=>`<span class="${k===m.cd?'pick':''}">${k==='U'?'1':k} = ${cv[k]}</span>`).join('')}</div></div>
     <div class="arrow">↓ T = ${P.T}</div>
-    <div class="seqblk"><b>Input logic · BR = ${m.br} (${P.I1}${P.I0}), T = ${P.T}</b><span style="font-family:var(--mono);font-size:14px">S1 S0 = <b>${P.S1}${P.S0}</b> &nbsp; L = <b>${P.L}</b>${P.L?' → SBR ← '+(MP.CAR+1):''}</span></div>
+    <div class="seqblk"><b>Input logic · BR = ${m.br} (${P.I1}${P.I0}), T = ${P.T}</b><span style="font-family:var(--mono);font-size:14px">S1 = I1 = <b>${P.S1}</b><br>S0 = I1·I0 + I1′·T = ${P.I1}·${P.I0} + ${1-P.I1}·${P.T} = <b>${P.S0}</b><br>L = I1′·I0·T = ${1-P.I1}·${P.I0}·${P.T} = <b>${P.L}</b>${P.L?' → SBR ← '+(MP.CAR+1):''}</span></div>
     <div class="arrow">↓</div>
     <div class="seqblk"><b>MUX 1 · next address</b><div class="mux">${['CAR + 1','AD','SBR','MAP'].map((n,i)=>`<span class="${i===P.sel?'pick':''}">${n}<br>= ${P.cands[i]}</span>`).join('')}</div></div>
     <div class="arrow">↓ next CAR = ${P.next}</div>`;}
@@ -921,6 +1187,7 @@ function mpRender(full){
 const QZ=[
  {q:'A two-word instruction is at 300–301 with address field 400. In relative mode, what is the EA?',o:['400','700','702','302'],k:2,w:'PC is 302 after fetching both words, so EA = 302 + 400 = 702.'},
  {q:'Which mode changes the register after it has been used?',o:['Register indirect','Autoincrement','Autodecrement','Indexed'],k:1,w:'Autoincrement uses R1 as the EA, then adds 1. Autodecrement subtracts first.'},
+ {q:'To add two 16-bit numbers on an 8-bit CPU you use:',o:['ADD for both bytes','ADD for the low byte, then ADDC for the high byte','ADDC for the low byte, then ADD for the high byte','INC for the high byte'],k:1,w:'The low byte has no carry coming in, so ADD. The high byte must also add the carry from the low byte, so ADDC.'},
  {q:'Which mask clears the low 4 bits of a byte with AND?',o:['0000 1111','1111 0000','1111 1111','0000 0000'],k:1,w:'AND with 0 clears, with 1 keeps. 1111 0000 keeps the high bits and clears the low 4.'},
  {q:'SHRA on 1000 0100 gives:',o:['0100 0010','1100 0010','0000 1000','0100 0011'],k:1,w:'Arithmetic shift right copies the sign bit (1) into bit 7.'},
  {q:'The overflow bit V equals:',o:['C8','F7','C7 ⊕ C8','C7 · C8'],k:2,w:'Overflow happens when the carry into bit 7 and the carry out of it differ.'},
